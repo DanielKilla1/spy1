@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SPY Trading Simulation</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Chart.js for data visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Luxon for date handling -->
+    <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.0/build/global/luxon.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon"></script>
+    <!-- Papa Parse for CSV parsing -->
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>SPY Trading Simulation</h1>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label for="year-select">Select Year:</label>
+                <select id="year-select"></select>
+            </div>
+            <div class="control-group">
+                <label for="range-select">Range Requirement:</label>
+                <select id="range-select">
+                    <option value="0">0 points</option>
+                    <option value="0.25">0.25 points</option>
+                    <option value="0.5">0.5 points</option>
+                    <option value="0.75">0.75 points</option>
+                    <option value="1">1 point</option>
+                    <option value="2" selected>2 points</option>
+                    <option value="3">3 points</option>
+                </select>
+            </div>
+            <button id="run-simulation">Run Simulation</button>
+        </div>
+        
+        <div class="results-container">
+            <div class="chart-container">
+                <canvas id="price-chart"></canvas>
+            </div>
+            <div class="chart-container">
+                <canvas id="performance-chart"></canvas>
+            </div>
+        </div>
+        
+        <div class="stats-container">
+            <div class="stat-card">
+                <h3>Annual Return</h3>
+                <p id="annual-return-stat">--</p>
+            </div>
+            <div class="stat-card">
+                <h3>Max Drawdown</h3>
+                <p id="max-drawdown-stat">--</p>
+            </div>
+            <div class="stat-card">
+                <h3>Profit Factor</h3>
+                <p id="profit-factor-stat">--</p>
+            </div>
+            <div class="stat-card">
+                <h3>Win Rate</h3>
+                <p id="win-rate-stat">--</p>
+            </div>
+            <div class="stat-card">
+                <h3>Total Trades</h3>
+                <p id="total-trades-stat">--</p>
+            </div>
+        </div>
+        
+        <div class="trades-container">
+            <h2>Trades</h2>
+            <table id="trades-table">
+                <thead>
+                    <tr>
+                        <th>Entry Date</th>
+                        <th>Exit Date</th>
+                        <th>Position</th>
+                        <th>Entry Price</th>
+                        <th>Exit Price</th>
+                        <th>P&L</th>
+                        <th>Exit Reason</th>
+                    </tr>
+                </thead>
+                <tbody id="trades-body">
+                    <!-- Trades will be inserted here -->
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="data-loading">
+            <p>Loading data... <span id="loading-progress">0%</span></p>
+            <progress id="loading-bar" value="0" max="100"></progress>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
