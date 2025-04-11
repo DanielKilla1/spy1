@@ -12,7 +12,12 @@ This application simulates a trading strategy for SPY (S&P 500 ETF) with the fol
    - If close < previous day's close: enter a short position
 
 2. Exit conditions:
-   - Stop loss: If any following 1-hour candle breaks below the first 1-hour candle's low for long positions, or above the first 1-hour candle's high for short positions
+   - ATR-Based Stop Loss System:
+     - Uses Average True Range (ATR) to set dynamic stop losses based on market volatility
+     - Configurable ATR multiplier (0.5x to 3.0x) to adjust stop distance
+     - Configurable ATR period (5 to 30) for calculating ATR values
+     - Monthly Profit Protection ensures you never lose more than a configurable percentage of monthly profits
+     - Minimum Risk-Reward filter ensures you only take trades with favorable probability
    - Profit target: Configurable profit target (default: 20 points)
    - End of trading day if neither stop loss nor profit target is hit
 
@@ -22,6 +27,13 @@ This application simulates a trading strategy for SPY (S&P 500 ETF) with the fol
 - Highly adjustable trading parameters:
   - Range requirement (0 to 3 points)
   - Profit target (0.1 to 30 points with extremely fine-grained options)
+  - Advanced ATR-based stop loss system:
+    - Adjustable ATR multiplier (0.5x to 3.0x) 
+    - Configurable ATR period (5 to 30 periods)
+  - Profit Protection System:
+    - Monthly profit tracking to prevent losing more than your month's gains
+    - Configurable profit protection levels (25%, 50%, 75%, or 100% of monthly profit)
+    - Risk-reward minimum requirements (1:1 to 3:1) to ensure favorable trade probability
 - Interactive price charts with entry and exit points
 - Performance comparison between the strategy and buy & hold
 - Detailed trading statistics (returns, drawdown, win rate, etc.)
@@ -85,11 +97,23 @@ Maximum of one trade per day.
 Trades are exited according to the following rules:
 
 #### Long Trade:
-- Exit immediately if any following 1-hour candle breaks below the first 1-hour candle's low (stop loss)
+- Stop Loss Options:
+  - Fixed (Default): Exit immediately if any following 1-hour candle breaks below the first 1-hour candle's low
+  - ATR-Based: Exit when price drops below entry price minus a multiple of the Average True Range
+  - Trailing: Initial stop at the first candle's low, then trails upward as price rises
+  - Time-Based: Ignores stop loss for specified hours after entry, then uses fixed stop
+  - Percentage: Uses a maximum percentage loss for stop (e.g., 1%)
+  - Partial Exit: Exits a portion of the position at the first stop, with wider stop for remainder
 - OR if profit target is reached intraday (configurable, default 20 points)
 
 #### Short Trade:
-- Exit immediately if any following 1-hour candle breaks above the first 1-hour candle's high (stop loss)
+- Stop Loss Options:
+  - Fixed (Default): Exit immediately if any following 1-hour candle breaks above the first 1-hour candle's high
+  - ATR-Based: Exit when price rises above entry price plus a multiple of the Average True Range
+  - Trailing: Initial stop at the first candle's high, then trails downward as price falls
+  - Time-Based: Ignores stop loss for specified hours after entry, then uses fixed stop
+  - Percentage: Uses a maximum percentage loss for stop (e.g., 1%)
+  - Partial Exit: Exits a portion of the position at the first stop, with wider stop for remainder
 - OR if profit target is reached intraday (configurable, default 20 points)
 
 - If neither condition is met during the day, exit at the last 1-hour candle's close
@@ -101,8 +125,46 @@ Trades are exited according to the following rules:
 
 The application exclusively uses real historical data from the SPY_full_1hour_adjsplit.txt file for all calculations and backtests.
 
+## ATR-Based Stop Loss and Profit Protection System
+
+This application features an advanced risk management system designed to preserve capital and protect profits:
+
+### ATR-Based Stop Loss
+
+The Average True Range (ATR) is a volatility indicator that measures the average range of price movement over a specified period. Unlike fixed stop losses that don't account for market conditions, ATR-based stops automatically adjust to current volatility:
+
+- **In high volatility:** Stops are placed further from entry to prevent being stopped out by normal market noise
+- **In low volatility:** Stops are placed closer to entry to minimize risk when the market is moving less
+
+You can customize:
+- **ATR Multiplier:** Controls how aggressive your stops are (lower = tighter stops, higher = wider stops)
+- **ATR Period:** Determines how many periods are used to calculate the ATR (shorter = more responsive to recent volatility, longer = more stable)
+
+### Monthly Profit Protection
+
+One of the most frustrating aspects of trading is making profits all month only to lose them in a few bad trades. The Monthly Profit Protection system prevents this by:
+
+1. Tracking all profits made within each calendar month
+2. Limiting the total losses you can take to a percentage of your monthly profits
+3. Automatically preventing new trades once you've hit your monthly loss limit
+
+For example, if you've made $5,000 in a month and set the Monthly Profit Protection to 50%, the system will stop taking new trades once you've lost $2,500 (50% of your profits). This ensures you always retain at least 50% of your monthly gains.
+
+### Risk-Reward Filter
+
+Professional traders understand that not all trading setups are equal. The Risk-Reward filter ensures you only take trades where the potential reward justifies the risk:
+
+- **Risk:** Calculated as the dollar amount from entry to your ATR-based stop
+- **Reward:** Calculated as the dollar amount from entry to your profit target
+- **Risk-Reward Ratio:** The ratio of potential reward to risk
+
+For example, with a 1.5:1 minimum requirement, a trade risking $500 would need a potential reward of at least $750 to be taken.
+
+By combining these three protection systems, this trading application helps preserve capital during drawdowns and protects profits during winning periods, which is critical for long-term success.
+
 ## Notes
 
 - The application simulates investing $10,000 in the strategy
 - All P&L calculations are based on a fixed position size of $10,000
+- Monthly profits and loss limits reset at the start of each calendar month
 - The application is designed for educational and research purposes only
