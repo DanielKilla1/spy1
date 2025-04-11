@@ -164,6 +164,40 @@ progress {
     color: #e74c3c;
 }
 
+.strategy-rules {
+    max-width: 1200px;
+    margin: 0 auto 30px;
+    padding: 20px;
+    background-color: white;
+    border-radius: 5px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.rule-section {
+    margin-bottom: 20px;
+}
+
+.rule-section h3 {
+    color: #2c3e50;
+    margin-bottom: 10px;
+    font-size: 18px;
+}
+
+.rule-section ul {
+    padding-left: 20px;
+    margin-bottom: 15px;
+}
+
+.rule-section li {
+    margin-bottom: 8px;
+    line-height: 1.5;
+}
+
+.rule-section strong {
+    font-weight: 600;
+    color: #2c3e50;
+}
+
 /* For smaller screens */
 @media (max-width: 768px) {
     .controls {

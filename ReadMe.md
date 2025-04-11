@@ -12,13 +12,16 @@ This application simulates a trading strategy for SPY (S&P 500 ETF) with the fol
    - If close < previous day's close: enter a short position
 
 2. Exit conditions:
-   - Stop loss: Low of the entry candle for long positions, high of the entry candle for short positions
-   - Profit target: Entry price + 20 points for long positions, entry price - 20 points for short positions
+   - Stop loss: If any following 1-hour candle breaks below the first 1-hour candle's low for long positions, or above the first 1-hour candle's high for short positions
+   - Profit target: Configurable profit target (default: 20 points)
    - End of trading day if neither stop loss nor profit target is hit
 
 ## Features
 
-- Year-by-year backtesting
+- Year-by-year backtesting using real historical SPY data
+- Highly adjustable trading parameters:
+  - Range requirement (0 to 3 points)
+  - Profit target (0.1 to 30 points with extremely fine-grained options)
 - Interactive price charts with entry and exit points
 - Performance comparison between the strategy and buy & hold
 - Detailed trading statistics (returns, drawdown, win rate, etc.)
@@ -29,6 +32,7 @@ This application simulates a trading strategy for SPY (S&P 500 ETF) with the fol
 - `index.html`: Main HTML structure
 - `styles.css`: CSS styling for the application
 - `script.js`: JavaScript code containing the simulation logic and visualization
+- `SPY_full_1hour_adjsplit.txt`: Real historical SPY 1-hour candle data file
 
 ## How to Run
 
@@ -81,22 +85,21 @@ Maximum of one trade per day.
 Trades are exited according to the following rules:
 
 #### Long Trade:
-- Exit immediately if any following 1-hour candle breaks below the first candle's low (stop loss)
-- OR if 20 points profit is reached intraday (profit target)
+- Exit immediately if any following 1-hour candle breaks below the first 1-hour candle's low (stop loss)
+- OR if profit target is reached intraday (configurable, default 20 points)
 
 #### Short Trade:
-- Exit immediately if any following 1-hour candle breaks above the first candle's high (stop loss)
-- OR if 20 points profit is reached intraday (profit target)
+- Exit immediately if any following 1-hour candle breaks above the first 1-hour candle's high (stop loss)
+- OR if profit target is reached intraday (configurable, default 20 points)
 
-- If no stop loss or profit target is hit, exit the trade at the last 1-hour candle of the day
+- If neither condition is met during the day, exit at the last 1-hour candle's close
 
 ### Trade Management
 - Position Size: $10,000 per trade (not adjusted for price or leverage)
 - Maximum Trades per Day: 1
 - No compounding or reinvestment of gains
 
-The script is configured to read this file and use it for the backtesting calculations. If the data file is missing or in a different format, the application will fall back to using generated mock data.
-```
+The application exclusively uses real historical data from the SPY_full_1hour_adjsplit.txt file for all calculations and backtests.
 
 ## Notes
 

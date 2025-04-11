@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Strategy parameters
     let rangeRequirement = 2.0;
+    let profitTarget = 20.0;
     
     // Initialize application
     initApp();
@@ -53,144 +54,74 @@ document.addEventListener('DOMContentLoaded', function() {
             loadingBar.value = 10;
             loadingProgress.textContent = '10%';
             
-            // Try to fetch the actual SPY data file
-            try {
-                loadingProgress.textContent = '20%';
-                loadingBar.value = 20;
-                
-                const response = await fetch('SPY_full_1hour_adjsplit.txt');
-                
-                loadingProgress.textContent = '50%';
-                loadingBar.value = 50;
-                
-                const csvText = await response.text();
-                
-                loadingProgress.textContent = '70%';
-                loadingBar.value = 70;
-                
-                // Parse the CSV data
-                Papa.parse(csvText, {
-                    header: false,
-                    dynamicTyping: true,
-                    skipEmptyLines: true,
-                    delimiter: ",", // Explicitly set the delimiter to comma
-                    complete: function(results) {
-                        // Process the data - format matches:
-                        // datetime, open, high, low, close, volume
-                        // e.g.: 2023-03-23 17:00:00,394.35,394.64,393.17,394.47,576169
-                        fullData = results.data.map(row => ({
-                            datetime: new Date(row[0]),
-                            open: parseFloat(row[1]),
-                            high: parseFloat(row[2]),
-                            low: parseFloat(row[3]),
-                            close: parseFloat(row[4]),
-                            volume: parseInt(row[5]),
-                            date: new Date(new Date(row[0]).setHours(0, 0, 0, 0)),
-                            time: row[0].split(' ')[1].substring(0, 5)
-                        }));
-                        
-                        console.log("Data loaded successfully. Sample:", fullData[0]);
-                        
-                        loadingProgress.textContent = '90%';
-                        loadingBar.value = 90;
-                        
-                        // Continue with data processing
-                        processData();
-                        populateYears();
-                        
-                        loadingProgress.textContent = '100%';
-                        loadingBar.value = 100;
-                    },
-                    error: function(error) {
-                        console.error('Error parsing CSV:', error);
-                        // Fall back to mock data
-                        generateMockData();
-                        processData();
-                        populateYears();
-                    }
-                });
-            } catch (fileError) {
-                console.warn('Could not load SPY data file:', fileError);
-                console.log('Falling back to mock data generation');
-                
-                // If file loading fails, fall back to mock data
-                generateMockData();
-                
-                loadingProgress.textContent = '90%';
-                loadingBar.value = 90;
-                
-                // Process the data
-                processData();
-                
-                // Populate year selection dropdown
-                populateYears();
-                
-                loadingProgress.textContent = '100%';
-                loadingBar.value = 100;
+            // Fetch the actual SPY data file
+            loadingProgress.textContent = '20%';
+            loadingBar.value = 20;
+            
+            const response = await fetch('SPY_full_1hour_adjsplit.txt');
+            
+            if (!response.ok) {
+                throw new Error(`Failed to load data file: ${response.status} ${response.statusText}`);
             }
+            
+            loadingProgress.textContent = '50%';
+            loadingBar.value = 50;
+            
+            const csvText = await response.text();
+            
+            loadingProgress.textContent = '70%';
+            loadingBar.value = 70;
+            
+            // Parse the CSV data
+            Papa.parse(csvText, {
+                header: false,
+                dynamicTyping: true,
+                skipEmptyLines: true,
+                delimiter: ",", // Explicitly set the delimiter to comma
+                complete: function(results) {
+                    // Process the data - format matches:
+                    // datetime, open, high, low, close, volume
+                    // e.g.: 2023-03-23 17:00:00,394.35,394.64,393.17,394.47,576169
+                    fullData = results.data.map(row => ({
+                        datetime: new Date(row[0]),
+                        open: parseFloat(row[1]),
+                        high: parseFloat(row[2]),
+                        low: parseFloat(row[3]),
+                        close: parseFloat(row[4]),
+                        volume: parseInt(row[5]),
+                        date: new Date(new Date(row[0]).setHours(0, 0, 0, 0)),
+                        time: row[0].split(' ')[1].substring(0, 5)
+                    }));
+                    
+                    console.log("Data loaded successfully. Sample:", fullData[0]);
+                    console.log(`Loaded ${fullData.length} data points from ${results.data.length} rows`);
+                    
+                    loadingProgress.textContent = '90%';
+                    loadingBar.value = 90;
+                    
+                    // Continue with data processing
+                    processData();
+                    populateYears();
+                    
+                    loadingProgress.textContent = '100%';
+                    loadingBar.value = 100;
+                },
+                error: function(error) {
+                    console.error('Error parsing CSV:', error);
+                    alert('Error parsing the data file. Please check if the file format is correct.');
+                    throw error;
+                }
+            });
             
         } catch (error) {
             console.error('Error loading data:', error);
+            alert('Could not load the SPY data file. Please make sure "SPY_full_1hour_adjsplit.txt" exists in the same directory as the HTML file.');
             throw error;
         }
     }
     
-    function generateMockData() {
-        // Generate 5 years of mock hourly data (2020-2024)
-        const startDate = new Date(2020, 0, 2, 9, 30);
-        const endDate = new Date(2024, 11, 31, 16, 0);
-        
-        let currentDate = new Date(startDate);
-        let price = 320; // Starting price for SPY
-        
-        while (currentDate <= endDate) {
-            // Skip weekends
-            const dayOfWeek = currentDate.getDay();
-            if (dayOfWeek === 0 || dayOfWeek === 6) {
-                currentDate.setDate(currentDate.getDate() + 1);
-                continue;
-            }
-            
-            // Only include market hours (9:30 AM - 4:00 PM)
-            const hour = currentDate.getHours();
-            const minute = currentDate.getMinutes();
-            if ((hour < 9 || (hour === 9 && minute < 30)) || hour > 16) {
-                // Advance by 1 hour
-                currentDate.setHours(currentDate.getHours() + 1);
-                continue;
-            }
-            
-            // Generate random price movements
-            const randomChange = (Math.random() - 0.5) * 2; // Between -1 and 1
-            price += randomChange;
-            
-            // Sometimes add larger moves for volatility
-            if (Math.random() < 0.05) {
-                price += (Math.random() - 0.5) * 8;
-            }
-            
-            // Add data point
-            const open = price;
-            const high = open + Math.random() * 1;
-            const low = open - Math.random() * 1;
-            const close = low + Math.random() * (high - low);
-            const volume = Math.floor(Math.random() * 1000000);
-            
-            fullData.push({
-                datetime: new Date(currentDate),
-                open: open,
-                high: high,
-                low: low,
-                close: close,
-                volume: volume,
-                date: new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate()),
-                time: `${currentDate.getHours()}:${currentDate.getMinutes()}`
-            });
-            
-            // Advance by 1 hour
-            currentDate.setHours(currentDate.getHours() + 1);
-        }
-    }
+    // The generateMockData function has been removed
+    // The application now exclusively uses real data from SPY_full_1hour_adjsplit.txt
     
     function processData() {
         // Extract unique years
@@ -283,6 +214,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function setupEventListeners() {
+        // Get profit target dropdown
+        const profitTargetSelect = document.getElementById('profit-target-select');
+        
         // Run simulation when button is clicked
         runButton.addEventListener('click', runSimulation);
         
@@ -294,11 +228,18 @@ document.addEventListener('DOMContentLoaded', function() {
             rangeRequirement = parseFloat(rangeSelect.value);
             runSimulation();
         });
+        
+        // Update profit target when selection changes
+        profitTargetSelect.addEventListener('change', function() {
+            profitTarget = parseFloat(profitTargetSelect.value);
+            runSimulation();
+        });
     }
     
     function runSimulation() {
         const selectedYear = parseInt(yearSelect.value);
         rangeRequirement = parseFloat(rangeSelect.value);
+        profitTarget = parseFloat(document.getElementById('profit-target-select').value);
         
         // Filter data for selected year
         const yearData = fullData.filter(d => d.datetime.getFullYear() === selectedYear);
@@ -355,7 +296,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Set up trade parameters
                 const entryPrice = firstCandle.close;
                 const stopPrice = isLong ? firstCandle.low : firstCandle.high;
-                const targetPrice = isLong ? (entryPrice + 20.0) : (entryPrice - 20.0);
+                const targetPrice = isLong ? (entryPrice + profitTarget) : (entryPrice - profitTarget);
                 
                 // Mark the entry on first candle
                 firstCandle.position = isLong ? 1 : -1;
@@ -382,12 +323,12 @@ document.addEventListener('DOMContentLoaded', function() {
                         currentCandle.stop_price = stopPrice;
                         currentCandle.target_price = targetPrice;
                         
-                        // Check stop loss
-                        if ((isLong && currentCandle.low <= stopPrice) || 
-                            (!isLong && currentCandle.high >= stopPrice)) {
+                        // Check stop loss - if any following 1-hour candle breaks below/above the first candle's low/high
+                        if ((isLong && currentCandle.low <= firstCandle.low) || 
+                            (!isLong && currentCandle.high >= firstCandle.high)) {
                             // Stop loss hit
                             isExited = true;
-                            exitPrice = stopPrice;
+                            exitPrice = isLong ? firstCandle.low : firstCandle.high;
                             exitCandle = currentCandle;
                             exitReason = 'Stop Loss';
                             
@@ -418,7 +359,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 }
                 
-                // If trade wasn't exited during the day, exit at the close of the last candle
+                // If neither condition is met during the day, exit at the last 1-hour candle's close
                 if (!isExited && dayCandles.length > 1) {
                     const lastCandle = dayCandles[dayCandles.length - 1];
                     isExited = true;
@@ -703,7 +644,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 plugins: {
                     title: {
                         display: true,
-                        text: `SPY Price with Entry/Exit Points - ${yearSelect.value} (Range Req: ${rangeRequirement} pts)`,
+                        text: `SPY Price with Entry/Exit Points - ${yearSelect.value} (Range: ${rangeRequirement} pts, PT: ${profitTarget} pts)`,
                         font: {
                             size: 16
                         }
@@ -788,7 +729,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 plugins: {
                     title: {
                         display: true,
-                        text: `Performance Comparison - ${yearSelect.value} (Range Req: ${rangeRequirement} pts)`,
+                        text: `Performance Comparison - ${yearSelect.value} (Range: ${rangeRequirement} pts, PT: ${profitTarget} pts)`,
                         font: {
                             size: 16
                         }
