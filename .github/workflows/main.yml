@@ -1,0 +1,17 @@
+name: Download Release File
+
+on:
+  push:
+    branches: [ "main" ]  # Runs whenever you push to the main branch
+
+jobs:
+  download-file:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download data file
+        run: |
+          curl -L -o SPY_full_5min_adjsplit.txt "https://github.com/DanielKilla1/spy1/releases/download/v1.0.0/SPY_full_5min_adjsplit.txt"
+      - name: Print success
+        run: echo "File downloaded!"
+
+
