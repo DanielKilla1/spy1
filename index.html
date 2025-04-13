@@ -10,6 +10,9 @@
     <!-- Luxon for date handling -->
     <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.0/build/global/luxon.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon"></script>
+    <!-- Chart.js plugins -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.0.0"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@1.2.1"></script>
     <!-- Papa Parse for CSV parsing -->
     <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 </head>
@@ -18,14 +21,37 @@
         <h1>SPY Trading Simulation</h1>
         
         <div class="controls">
-            <div class="control-group">
-                <label for="year-select">Select Year:</label>
-                <select id="year-select"></select>
+            <div class="control-row">
+                <div class="control-group">
+                    <label for="year-select">Select Year:</label>
+                    <select id="year-select"></select>
+                </div>
+                <div class="control-group">
+                    <label for="max-trades-per-day">Max Trades Per Day:</label>
+                    <select id="max-trades-per-day">
+                        <option value="1" selected>1 trade</option>
+                        <option value="5">5 trades</option>
+                        <option value="10">10 trades</option>
+                        <option value="0">Unlimited</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label for="position-size">Position Size:</label>
+                    <select id="position-size">
+                        <option value="100">$100</option>
+                        <option value="1000">$1,000</option>
+                        <option value="10000" selected>$10,000</option>
+                    </select>
+                </div>
             </div>
             <div class="control-group">
                 <label for="range-select">Range Requirement:</label>
                 <select id="range-select">
                     <option value="0">0 points</option>
+                    <option value="0.05">0.05 points</option>
+                    <option value="0.1">0.1 points</option>
+                    <option value="0.15">0.15 points</option>
+                    <option value="0.2">0.2 points</option>
                     <option value="0.25">0.25 points</option>
                     <option value="0.5">0.5 points</option>
                     <option value="0.75">0.75 points</option>
@@ -69,59 +95,75 @@
                     <div class="control-group">
                         <label for="exit-strategy">Exit Strategy:</label>
                         <select id="exit-strategy">
-                            <option value="atr" selected>ATR-Based</option>
-                            <option value="default">Default (Fixed Stop)</option>
+                            <option value="rsi">RSI-Based</option>
+                            <option value="default" selected>Default (Fixed Stop)</option>
                         </select>
                     </div>
 
-                    <div class="control-group atr-controls">
-                        <label for="atr-multiplier">ATR Multiplier:</label>
-                        <select id="atr-multiplier">
-                            <option value="0.5">0.5x</option>
-                            <option value="0.75">0.75x</option>
-                            <option value="1" selected>1.0x</option>
-                            <option value="1.5">1.5x</option>
-                            <option value="2">2.0x</option>
-                            <option value="2.5">2.5x</option>
-                            <option value="3">3.0x</option>
+                    <div class="control-group rsi-controls">
+                        <label for="rsi-overbought">RSI Overbought:</label>
+                        <select id="rsi-overbought">
+                            <option value="65">65</option>
+                            <option value="70" selected>70</option>
+                            <option value="75">75</option>
+                            <option value="80">80</option>
+                            <option value="85">85</option>
                         </select>
                     </div>
                     
-                    <div class="control-group atr-controls">
-                        <label for="atr-period">ATR Period:</label>
-                        <select id="atr-period">
-                            <option value="5">5 periods</option>
-                            <option value="10">10 periods</option>
+                    <div class="control-group rsi-controls">
+                        <label for="rsi-oversold">RSI Oversold:</label>
+                        <select id="rsi-oversold">
+                            <option value="15">15</option>
+                            <option value="20">20</option>
+                            <option value="25">25</option>
+                            <option value="30" selected>30</option>
+                            <option value="35">35</option>
+                        </select>
+                    </div>
+                    
+                    <div class="control-group rsi-controls">
+                        <label for="rsi-period">RSI Period:</label>
+                        <select id="rsi-period">
+                            <option value="7">7 periods</option>
+                            <option value="9">9 periods</option>
                             <option value="14" selected>14 periods</option>
-                            <option value="20">20 periods</option>
-                            <option value="30">30 periods</option>
+                            <option value="21">21 periods</option>
+                            <option value="28">28 periods</option>
                         </select>
                     </div>
                 </div>
-                
+            </div>
+            
+            <div class="controls-section">
+                <h3>Additional Trade Settings</h3>
                 <div class="control-row">
                     <div class="control-group">
-                        <label for="monthly-profit-limit">Monthly Profit Protection:</label>
-                        <select id="monthly-profit-limit">
-                            <option value="off">Off</option>
-                            <option value="25">25% of Monthly Profit</option>
-                            <option value="50">50% of Monthly Profit</option>
-                            <option value="75">75% of Monthly Profit</option>
-                            <option value="100" selected>100% of Monthly Profit</option>
+                        <label for="breakout-points">Breakout Requirement:</label>
+                        <select id="breakout-points">
+                            <option value="0.1">0.1 points</option>
+                            <option value="0.2">0.2 points</option>
+                            <option value="0.3">0.3 points</option>
+                            <option value="0.4">0.4 points</option>
+                            <option value="0.5" selected>0.5 points</option>
+                            <option value="0.75">0.75 points</option>
+                            <option value="1.0">1.0 points</option>
+                            <option value="1.5">1.5 points</option>
                         </select>
                     </div>
                     
                     <div class="control-group">
-                        <label for="risk-reward-min">Minimum Risk-Reward:</label>
-                        <select id="risk-reward-min">
-                            <option value="0">No Minimum</option>
-                            <option value="1">1:1</option>
-                            <option value="1.5" selected>1.5:1</option>
-                            <option value="2">2:1</option>
-                            <option value="3">3:1</option>
+                        <label for="bars-lookback">Bars Lookback:</label>
+                        <select id="bars-lookback">
+                            <option value="1">1 bar</option>
+                            <option value="2" selected>2 bars</option>
+                            <option value="3">3 bars</option>
+                            <option value="4">4 bars</option>
+                            <option value="5">5 bars</option>
                         </select>
                     </div>
                 </div>
+            </div>
             </div>
             
             <button id="run-simulation">Run Simulation</button>
@@ -132,16 +174,14 @@
             <button class="tab-button active" data-tab="results">Results</button>
             <button class="tab-button" data-tab="analytics">Analytics</button>
             <button class="tab-button" data-tab="trades">Trades</button>
+            <button class="tab-button" data-tab="rules">Rules</button>
         </div>
         
         <!-- Results Tab Content -->
         <div class="tab-content" id="results-tab">
             <div class="results-container">
-                <div class="chart-container">
+                <div class="chart-container main-chart">
                     <canvas id="price-chart"></canvas>
-                </div>
-                <div class="chart-container">
-                    <canvas id="performance-chart"></canvas>
                 </div>
             </div>
             
@@ -166,12 +206,37 @@
                     <h3>Total Trades</h3>
                     <p id="total-trades-stat">--</p>
                 </div>
+                <div class="stat-card">
+                    <h3>Total Investment</h3>
+                    <p id="total-investment-stat">--</p>
+                </div>
             </div>
         </div>
         
         <!-- Analytics Tab Content -->
         <div class="tab-content" id="analytics-tab" style="display: none;">
             <div class="analytics-container">
+                <h2>Performance Summary</h2>
+                
+                <div class="stats-container summary-stats">
+                    <div class="stat-card">
+                        <h3>Total Investment</h3>
+                        <p id="analytics-investment-stat">--</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Total Wins</h3>
+                        <p id="analytics-wins-stat">--</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Total Losses</h3>
+                        <p id="analytics-losses-stat">--</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Net Profit</h3>
+                        <p id="analytics-net-profit-stat">--</p>
+                    </div>
+                </div>
+                
                 <h2>Monthly Performance Analytics</h2>
                 
                 <div class="chart-container">
@@ -180,19 +245,19 @@
                 
                 <div class="stats-container">
                     <div class="stat-card">
-                        <h3>Best Month</h3>
+                        <h3>Most Profitable Month</h3>
                         <p id="best-month-stat">--</p>
                     </div>
                     <div class="stat-card">
-                        <h3>Worst Month</h3>
+                        <h3>Least Profitable Month</h3>
                         <p id="worst-month-stat">--</p>
                     </div>
                     <div class="stat-card">
-                        <h3>Average Monthly Return</h3>
+                        <h3>Average Monthly Net Profit</h3>
                         <p id="avg-monthly-return-stat">--</p>
                     </div>
                     <div class="stat-card">
-                        <h3>Monthly Consistency</h3>
+                        <h3>Months With Profit</h3>
                         <p id="monthly-consistency-stat">--</p>
                     </div>
                     <div class="stat-card">
@@ -209,8 +274,8 @@
                                 <th>Month</th>
                                 <th>Trades</th>
                                 <th>Win Rate</th>
-                                <th>P&L</th>
-                                <th>Profit Factor</th>
+                                <th>Net Profit</th>
+                                <th>ROI %</th>
                             </tr>
                         </thead>
                         <tbody id="monthly-body">
@@ -245,71 +310,78 @@
             </div>
         </div>
         
-        <div class="data-loading">
-            <p>Loading data... <span id="loading-progress">0%</span></p>
-            <progress id="loading-bar" value="0" max="100"></progress>
-        </div>
-    </div>
-    
-    <div class="strategy-rules">
-        <h2>Trading Strategy Rules</h2>
-        <div class="rule-section">
-            <h3>Entry Conditions</h3>
-            <ul>
-                <li>The first 1-hour candle of the trading day must have a range of at least the selected range requirement</li>
-                <li>Long trade → if the first 1-hour candle closes above the previous day's close</li>
-                <li>Short trade → if the first 1-hour candle closes below the previous day's close</li>
-                <li>No trade is taken if the first candle closes exactly equal to the previous day's close</li>
-            </ul>
-            <p>Trade entry occurs at the close of the first 1-hour candle. Maximum of one trade per day.</p>
-        </div>
         
-        <div class="rule-section">
-            <h3>Exit Conditions</h3>
-            <p><strong>Two exit strategies are available:</strong></p>
-            
-            <ul>
-                <li><strong>ATR-Based Stop Loss:</strong> Dynamic stop loss based on market volatility using Average True Range
+        <!-- Rules Tab Content -->
+        <div class="tab-content" id="rules-tab" style="display: none;">
+            <div class="rules-container">
+                <h2>Trading Strategy Rules</h2>
+                <div class="rule-section">
+                    <h3>Entry Conditions</h3>
+                    <h4>First Trade of the Day</h4>
                     <ul>
-                        <li>Customizable ATR multiplier to adjust stop loss distance</li>
-                        <li>Adaptable to market conditions - wider in high volatility, tighter in low volatility</li>
+                        <li>The first 5-minute candle of the trading day must have a range of at least the selected range requirement</li>
+                        <li>Long trade → if the first 5-minute candle closes above the previous day's close</li>
+                        <li>Short trade → if the first 5-minute candle closes below the previous day's close</li>
+                        <li>No trade is taken if the first candle closes exactly equal to the previous day's close</li>
                     </ul>
-                </li>
-                <li><strong>Default Strategy:</strong> Fixed stop loss based on first candle's range
+                    <p>Trade entry occurs at the close of the first 5-minute candle after market open (9:30 AM ET).</p>
+                    
+                    <h4>Additional Trades</h4>
                     <ul>
-                        <li>For Long Positions: Exit if any following 1-hour candle breaks below the first 1-hour candle's low</li>
-                        <li>For Short Positions: Exit if any following 1-hour candle breaks above the first 1-hour candle's high</li>
+                        <li><strong>Short Entry:</strong> Current bar breaks the low of the two previous bars by at least 0.5 points</li>
+                        <li><strong>Long Entry:</strong> Current bar breaks the high of the two previous bars by at least 0.5 points</li>
                     </ul>
-                </li>
-                <li><strong>Monthly Profit Protection:</strong> Prevents losing more than a percentage of monthly profits
+                    <p>Additional trades will follow this pattern throughout the trading day, respecting the maximum trades per day setting.</p>
+                    <p>Trading hours are restricted to regular market hours: 9:30 AM to 4:00 PM Eastern Time.</p>
+                </div>
+                
+                <div class="rule-section">
+                    <h3>Exit Conditions</h3>
+                    <h4>First Trade of the Day</h4>
+                    <p><strong>Two exit strategies are available:</strong></p>
+                    
                     <ul>
-                        <li>Tracks profits on a monthly basis</li>
-                        <li>Stops taking new trades once monthly loss limit is reached</li>
-                        <li>Ensures you preserve a portion of each month's gains</li>
+                        <li><strong>RSI-Based Exit:</strong> Dynamic exit based on Relative Strength Index (RSI) values
+                            <ul>
+                                <li>Customizable RSI period for calculating RSI values (7-28)</li>
+                                <li>Configurable overbought level (65-85) for exiting long positions</li>
+                                <li>Configurable oversold level (15-35) for exiting short positions</li>
+                                <li>Adapts to market conditions by measuring momentum and trend strength</li>
+                            </ul>
+                        </li>
+                        <li><strong>Default Strategy:</strong> Fixed stop loss based on first candle's range
+                            <ul>
+                                <li>For Long Positions: Exit if any following 5-minute candle breaks below the first 5-minute candle's low</li>
+                                <li>For Short Positions: Exit if any following 5-minute candle breaks above the first 5-minute candle's high</li>
+                            </ul>
+                        </li>
+                        <li><strong>Profit Target:</strong> Exit when price reaches the selected profit target (configurable from 0.1 to 30 points)</li>
+                        <li><strong>End of Day:</strong> If neither stop loss nor profit target is hit, exit at 4:00 PM Eastern Time (market close)</li>
                     </ul>
-                </li>
-                <li><strong>Risk-Reward Filter:</strong> Only takes trades with favorable risk-to-reward ratios
+
+                    <h4>Additional Trades</h4>
                     <ul>
-                        <li>Calculates potential risk based on stop distance</li>
-                        <li>Ensures reward potential justifies the risk taken</li>
+                        <li><strong>Short Positions:</strong> Exit if price breaks the high of the previous two bars</li>
+                        <li><strong>Long Positions:</strong> Exit if price breaks the low of the previous two bars</li>
+                        <li><strong>Alternate Exit:</strong> If no stop loss is triggered, exit when price breaks the previous bar's high (for shorts) or low (for longs)</li>
+                        <li><strong>Profit Target:</strong> Same as first trade (configurable from 0.1 to 30 points)</li>
+                        <li><strong>End of Day:</strong> If no exit condition is met, exit at 4:00 PM Eastern Time</li>
                     </ul>
-                </li>
-                <li><strong>Profit Target:</strong> Exit when price reaches the selected profit target (configurable from 0.1 to 30 points)</li>
-                <li><strong>End of Day:</strong> If neither stop loss nor profit target is hit, exit at the last 1-hour candle's close</li>
-            </ul>
-        </div>
-        
-        <div class="rule-section">
-            <h3>Trade Management</h3>
-            <ul>
-                <li>Position Size: $10,000 per trade (not adjusted for price or leverage)</li>
-                <li>Maximum Trades per Day: 1</li>
-                <li>No compounding or reinvestment of gains</li>
-            </ul>
+                </div>
+                
+                <div class="rule-section">
+                    <h3>Trade Management</h3>
+                    <ul>
+                        <li>Position Size: Configurable ($100, $1,000, or $10,000 per trade)</li>
+                        <li>Maximum Trades per Day: Configurable (1, 5, 10, or unlimited)</li>
+                        <li>No compounding or reinvestment of gains</li>
+                        <li>All P&L calculations are based on the selected position size</li>
+                    </ul>
+                </div>
+            </div>
         </div>
     </div>
     
     <script src="script.js"></script>
-    <script src="debug.js"></script>
 </body>
 </html>

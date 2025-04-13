@@ -4,47 +4,65 @@ A web-based application for backtesting a specific SPY trading strategy across d
 
 ## Overview
 
-This application simulates a trading strategy for SPY (S&P 500 ETF) with the following rules:
+This application simulates a trading strategy for SPY (S&P 500 ETF) using 5-minute candle data, with the following rules:
 
-1. Enter a trade on the first candle of the day if:
-   - The candle range (high - low) is at least 2.0 points
+### First Trade of the Day (9:30 AM Candle)
+1. Enter a trade on the first candle at or after market open (9:30 AM ET) if:
+   - The candle range (high - low) is at least the selected range requirement
    - If close > previous day's close: enter a long position
    - If close < previous day's close: enter a short position
 
-2. Exit conditions:
-   - ATR-Based Stop Loss System:
-     - Uses Average True Range (ATR) to set dynamic stop losses based on market volatility
-     - Configurable ATR multiplier (0.5x to 3.0x) to adjust stop distance
-     - Configurable ATR period (5 to 30) for calculating ATR values
-     - Monthly Profit Protection ensures you never lose more than a configurable percentage of monthly profits
-     - Minimum Risk-Reward filter ensures you only take trades with favorable probability
+2. Exit conditions for first trade:
+   - RSI-Based Exit Strategy:
+     - Uses Relative Strength Index (RSI) to determine exit points based on overbought/oversold conditions
+     - Configurable RSI overbought and oversold levels
+     - Configurable RSI period for calculation
+   - Default Strategy: Exit when the market open candle's high/low is breached
    - Profit target: Configurable profit target (default: 20 points)
-   - End of trading day if neither stop loss nor profit target is hit
+   - Market close (4:00 PM ET) if neither stop loss nor profit target is hit
+
+### Additional Trades (Breakout Strategy)
+1. Enter additional trades throughout the day if:
+   - For Short: Current bar breaks the low of the previous N bars (configurable) by X points (configurable, default: 0.5 points)
+   - For Long: Current bar breaks the high of the previous N bars (configurable) by X points (configurable, default: 0.5 points)
+
+2. Exit conditions for additional trades:
+   - For Short: Exit if price breaks the high of the previous two bars
+   - For Long: Exit if price breaks the low of the previous two bars
+   - Alternate exit: If no stop loss is triggered, exit when price breaks previous bar's high (for shorts) or low (for longs)
+   - Profit target: Same as first trade (configurable from 0.1 to 30 points)
+   - Market close (4:00 PM ET) if no exit condition is met
 
 ## Features
 
 - Year-by-year backtesting using real historical SPY data
 - Highly adjustable trading parameters:
   - Range requirement (0 to 3 points)
-  - Profit target (0.1 to 30 points with extremely fine-grained options)
-  - Advanced ATR-based stop loss system:
-    - Adjustable ATR multiplier (0.5x to 3.0x) 
-    - Configurable ATR period (5 to 30 periods)
-  - Profit Protection System:
-    - Monthly profit tracking to prevent losing more than your month's gains
-    - Configurable profit protection levels (25%, 50%, 75%, or 100% of monthly profit)
-    - Risk-reward minimum requirements (1:1 to 3:1) to ensure favorable trade probability
+  - Profit target (0.1 to 30 points with fine-grained options)
+  - RSI-based exit parameters:
+    - RSI period (7 to 28)
+    - Overbought level (65 to 85)
+    - Oversold level (15 to 35)
+  - Trades per day options (1, 5, 10, or unlimited)
+  - Position size options ($100, $1,000, or $10,000)
+  - Additional trade parameters:
+    - Breakout requirement (0.1 to 1.5 points)
+    - Bars lookback (1 to 5 bars)
+- Trading strictly during market hours (9:30 AM - 4:00 PM ET)
+- Military time (24-hour) format to avoid AM/PM confusion
 - Interactive price charts with entry and exit points
-- Performance comparison between the strategy and buy & hold
 - Detailed trading statistics (returns, drawdown, win rate, etc.)
 - Trade-by-trade breakdown with P&L information
+- Monthly performance analytics
 
 ## File Structure
 
 - `index.html`: Main HTML structure
 - `styles.css`: CSS styling for the application
 - `script.js`: JavaScript code containing the simulation logic and visualization
-- `SPY_full_1hour_adjsplit.txt`: Real historical SPY 1-hour candle data file
+- `debug.js`: Debugging utilities to help verify application functionality
+- `debug.html`: Debug console to test and verify components
+- `SPY_full_5min_adjsplit.txt`: Real historical SPY 5-minute candle data file
 
 ## How to Run
 
@@ -68,103 +86,117 @@ python3 -m http.server
 
 Then visit `http://localhost:8000` in your browser.
 
-### Static Hosting
+## Debug Mode
 
-You can also host this application on any static web hosting service:
+To help diagnose and verify functionality, the application includes debugging tools:
 
-1. GitHub Pages
-2. Netlify
-3. Vercel
-4. Amazon S3
+1. Open `debug.html` in your browser to access the debug console
+2. Use the debugging panel to:
+   - Check dependencies and libraries
+   - Test data loading functionality
+   - Verify market hours filtering works correctly
+   - Test trade recording functionality
+   - Run a complete integration test
 
-Simply upload the three files to your hosting provider.
+When using the regular application, a debug panel is available in the top-right corner to:
+- Check if trades are being correctly recorded
+- Test market hours detection
+- Inspect data loading
 
 ## Trading Strategy Rules
 
-The application implements the following specific trading strategy:
+The application implements the following trading strategy:
 
-### Entry Conditions
-A trade is entered only if all of the following are true:
-1. The first 1-hour candle of the trading day has a range of at least 2.0 SPY points (High - Low >= 2.0)
-2. Long trade → if the first 1-hour candle closes above the previous day's close
-3. Short trade → if the first 1-hour candle closes below the previous day's close
-4. No trade is taken if the first candle closes exactly equal to the previous day's close
+### First Trade of the Day (9:30 AM Candle)
 
-Trade Entry occurs at the close of the first 1-hour candle.
-Maximum of one trade per day.
+#### Entry Conditions
+The first trade of the day is entered only if all of the following are true:
+1. The first candle at or after market open (9:30 AM ET) has a range of at least the selected SPY points (High - Low >= selected range)
+2. Long trade → if the market open candle closes above the previous day's close
+3. Short trade → if the market open candle closes below the previous day's close
+4. No trade is taken if the candle closes exactly equal to the previous day's close
 
-### Exit Conditions
-Trades are exited according to the following rules:
+Trade Entry occurs at the close of the market open candle.
 
-#### Long Trade:
-- Stop Loss Options:
-  - Fixed (Default): Exit immediately if any following 1-hour candle breaks below the first 1-hour candle's low
-  - ATR-Based: Exit when price drops below entry price minus a multiple of the Average True Range
-  - Trailing: Initial stop at the first candle's low, then trails upward as price rises
-  - Time-Based: Ignores stop loss for specified hours after entry, then uses fixed stop
-  - Percentage: Uses a maximum percentage loss for stop (e.g., 1%)
-  - Partial Exit: Exits a portion of the position at the first stop, with wider stop for remainder
-- OR if profit target is reached intraday (configurable, default 20 points)
+#### Exit Conditions for First Trade
 
-#### Short Trade:
-- Stop Loss Options:
-  - Fixed (Default): Exit immediately if any following 1-hour candle breaks above the first 1-hour candle's high
-  - ATR-Based: Exit when price rises above entry price plus a multiple of the Average True Range
-  - Trailing: Initial stop at the first candle's high, then trails downward as price falls
-  - Time-Based: Ignores stop loss for specified hours after entry, then uses fixed stop
-  - Percentage: Uses a maximum percentage loss for stop (e.g., 1%)
-  - Partial Exit: Exits a portion of the position at the first stop, with wider stop for remainder
-- OR if profit target is reached intraday (configurable, default 20 points)
+**RSI-Based Exit (Optional):**
+- For Long Positions: Exit when the RSI reaches the overbought threshold
+- For Short Positions: Exit when the RSI reaches the oversold threshold
+- Also uses a standard stop loss as a safety measure
 
-- If neither condition is met during the day, exit at the last 1-hour candle's close
+**Default Exit Strategy:**
+- For Long Positions: Exit if any candle breaks below the market open candle's low
+- For Short Positions: Exit if any candle breaks above the market open candle's high
+- OR if profit target is reached (configurable, default 20 points)
+- OR at market close (4:00 PM ET) if neither condition is met
+
+### Additional Trades (Intraday Breakout Strategy)
+
+If maximum trades per day is set to more than 1, the system will look for additional trading opportunities throughout the day.
+
+#### Entry Conditions for Additional Trades
+1. For Short Entry: Current bar breaks the low of the previous N bars (configurable) by at least X points (default: 0.5 points)
+2. For Long Entry: Current bar breaks the high of the previous N bars (configurable) by at least X points (default: 0.5 points)
+
+#### Exit Conditions for Additional Trades
+1. For Short Positions:
+   - Exit if price breaks the high of the previous two bars (stop loss)
+   - If no stop loss is triggered, exit when price breaks the previous bar's high
+   
+2. For Long Positions:
+   - Exit if price breaks the low of the previous two bars (stop loss)
+   - If no stop loss is triggered, exit when price breaks the previous bar's low
+
+3. Common exit conditions:
+   - Exit at profit target (same as first trade)
+   - Exit at market close (4:00 PM ET) if no other exit condition is met
 
 ### Trade Management
-- Position Size: $10,000 per trade (not adjusted for price or leverage)
-- Maximum Trades per Day: 1
+- Position Size: Configurable ($100, $1,000, or $10,000 per trade)
+- Maximum Trades Per Day: Configurable (1, 5, 10, or unlimited)
 - No compounding or reinvestment of gains
+- All P&L calculations are based on the selected position size
 
-The application exclusively uses real historical data from the SPY_full_1hour_adjsplit.txt file for all calculations and backtests.
+The application uses real historical 5-minute SPY data for all calculations and backtests.
 
-## ATR-Based Stop Loss and Profit Protection System
+## Recent Updates
 
-This application features an advanced risk management system designed to preserve capital and protect profits:
+### Additional Trades Strategy
+The application now supports multiple trades per day with a configurable breakout strategy:
 
-### ATR-Based Stop Loss
+- **How it works:** Identifies potential breakout opportunities throughout the trading day
+- **For short trades:** Enters when price breaks below the low of previous N bars by X points
+- **For long trades:** Enters when price breaks above the high of previous N bars by X points
+- **Customizable:** Adjust breakout requirement (0.1-1.5 points) and lookback periods (1-5 bars)
+- **Smart exit strategy:** Exits based on previous bars' highs/lows to protect profits
 
-The Average True Range (ATR) is a volatility indicator that measures the average range of price movement over a specified period. Unlike fixed stop losses that don't account for market conditions, ATR-based stops automatically adjust to current volatility:
+### RSI-Based Exit Strategy
+The application now offers an RSI-based exit strategy as an alternative to the default fixed-stop approach:
 
-- **In high volatility:** Stops are placed further from entry to prevent being stopped out by normal market noise
-- **In low volatility:** Stops are placed closer to entry to minimize risk when the market is moving less
+- **How it works:** Monitors the Relative Strength Index (RSI) to identify potential reversal points
+- **For long trades:** Exits when RSI reaches an overbought condition (default: 70)
+- **For short trades:** Exits when RSI reaches an oversold condition (default: 30)
+- **Customizable:** Adjust RSI period, overbought, and oversold levels to match your trading style
 
-You can customize:
-- **ATR Multiplier:** Controls how aggressive your stops are (lower = tighter stops, higher = wider stops)
-- **ATR Period:** Determines how many periods are used to calculate the ATR (shorter = more responsive to recent volatility, longer = more stable)
+### Market Hours Enforcement
+Trades are now strictly limited to regular market hours (9:30 AM - 4:00 PM ET):
 
-### Monthly Profit Protection
+- Only candles during market hours are considered for trading
+- Entry signals occur at the first candle at or after market open
+- All trades are closed by market close (4:00 PM ET)
+- Time calculations correctly handle Eastern Time
 
-One of the most frustrating aspects of trading is making profits all month only to lose them in a few bad trades. The Monthly Profit Protection system prevents this by:
-
-1. Tracking all profits made within each calendar month
-2. Limiting the total losses you can take to a percentage of your monthly profits
-3. Automatically preventing new trades once you've hit your monthly loss limit
-
-For example, if you've made $5,000 in a month and set the Monthly Profit Protection to 50%, the system will stop taking new trades once you've lost $2,500 (50% of your profits). This ensures you always retain at least 50% of your monthly gains.
-
-### Risk-Reward Filter
-
-Professional traders understand that not all trading setups are equal. The Risk-Reward filter ensures you only take trades where the potential reward justifies the risk:
-
-- **Risk:** Calculated as the dollar amount from entry to your ATR-based stop
-- **Reward:** Calculated as the dollar amount from entry to your profit target
-- **Risk-Reward Ratio:** The ratio of potential reward to risk
-
-For example, with a 1.5:1 minimum requirement, a trade risking $500 would need a potential reward of at least $750 to be taken.
-
-By combining these three protection systems, this trading application helps preserve capital during drawdowns and protects profits during winning periods, which is critical for long-term success.
+### Bug Fixes
+A critical issue with the market hours filtering was fixed:
+- Fixed incorrect variable reference causing trades not to be recorded
+- Trade entry dates now correctly reference the market open candle
+- Added debugging tools to verify correct functionality
+- Fixed maximal trades per day functionality to properly respect limits
 
 ## Notes
 
-- The application simulates investing $10,000 in the strategy
-- All P&L calculations are based on a fixed position size of $10,000
-- Monthly profits and loss limits reset at the start of each calendar month
+- The application simulates investing using the selected position size
+- All P&L calculations are based on the selected position size per trade
+- Times are displayed in 24-hour (military) format for clarity
 - The application is designed for educational and research purposes only

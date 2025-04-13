@@ -1,1553 +1,1444 @@
 // SPY Trading Simulation
+
+// VERSION INFO
+window.APP_VERSION = "1.0.3"; // Simplified, stable version
+window.LAST_UPDATED = "2025-04-13";
+
+// Global variables for data access
+window.fullData = [];
+window.trades = [];
+window.years = [];
+window.marketOpenCandles = []; // Track all 9:30 candles
+
+// Strategy parameters - default values
+window.rangeRequirement = 2.0;
+window.profitTarget = 20.0;
+window.maxTradesPerDay = 1;
+window.positionSize = 10000;
+window.exitStrategy = "default"; // "rsi" or "default"
+window.rsiPeriod = 14;
+window.rsiOverbought = 70;
+window.rsiOversold = 30;
+
+// Additional trade parameters - default values
+window.breakoutPoints = 0.5;  // Points required for additional trade breakout
+window.barsLookback = 2;      // Number of bars to look back for breakout pattern
+
+// Market hours constants
+window.marketOpenHour = 9;
+window.marketOpenMinute = 30; // 9:30 AM ET
+window.marketCloseHour = 16;
+window.marketCloseMinute = 0; // 4:00 PM ET
+
+// Debug mode toggle - always enable to prevent data loading issues
+window.MARKET_HOURS_DEBUG_MODE = true;
+
+// DOM elements will be initialized when DOM is loaded
+window.yearSelect = null;
+window.rangeSelect = null;
+window.profitTargetSelect = null;
+window.maxTradesPerDaySelect = null;
+window.positionSizeSelect = null;
+window.exitStrategySelect = null;
+window.rsiOverboughtSelect = null;
+window.rsiOversoldSelect = null;
+window.rsiPeriodSelect = null;
+window.breakoutPointsSelect = null;
+window.barsLookbackSelect = null;
+window.runButton = null;
+window.loadingProgress = null;
+window.loadingBar = null;
+window.dataLoading = null;
+window.tabButtons = null;
+window.tabContents = null;
+
+// Chart instances
+window.priceChart = null;
+window.performanceChart = null;
+window.monthlyPerformanceChart = null;
+
+// Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
-    console.log("DOM loaded, initializing application");
+    console.log(`SPY Trading Simulation v${window.APP_VERSION} initializing...`);
     
-    // DOM elements
-    const yearSelect = document.getElementById('year-select');
-    const rangeSelect = document.getElementById('range-select');
-    const profitTargetSelect = document.getElementById('profit-target-select');
-    const runButton = document.getElementById('run-simulation');
-    const loadingProgress = document.getElementById('loading-progress');
-    const loadingBar = document.getElementById('loading-bar');
-    const dataLoading = document.querySelector('.data-loading');
+    // Initialize DOM element references
+    window.yearSelect = document.getElementById('year-select');
+    window.rangeSelect = document.getElementById('range-select');
+    window.profitTargetSelect = document.getElementById('profit-target-select');
+    window.maxTradesPerDaySelect = document.getElementById('max-trades-per-day');
+    window.positionSizeSelect = document.getElementById('position-size');
+    window.exitStrategySelect = document.getElementById('exit-strategy');
+    window.rsiOverboughtSelect = document.getElementById('rsi-overbought');
+    window.rsiOversoldSelect = document.getElementById('rsi-oversold');
+    window.rsiPeriodSelect = document.getElementById('rsi-period');
+    window.breakoutPointsSelect = document.getElementById('breakout-points');
+    window.barsLookbackSelect = document.getElementById('bars-lookback');
+    window.runButton = document.getElementById('run-simulation');
+    window.loadingProgress = document.getElementById('loading-progress');
+    window.loadingBar = document.getElementById('loading-bar');
+    window.dataLoading = document.querySelector('.data-loading');
+    window.tabButtons = document.querySelectorAll('.tab-button');
+    window.tabContents = document.querySelectorAll('.tab-content');
     
-    // Chart instances
-    let priceChart = null;
-    let performanceChart = null;
+    // Set up tab functionality
+    setupTabs();
     
-    // Data storage
-    let fullData = [];
-    let trades = [];
-    let years = [];
+    // Set up strategy parameter change handlers
+    setupParameterChangeHandlers();
     
-    // Strategy parameters
-    let rangeRequirement = 2.0;
-    let profitTarget = 20.0;
-    
-    // Exit strategy parameters
-    let exitStrategy = "atr"; // "atr" or "default"
-    
-    // ATR-based stop loss parameters
-    let atrMultiplier = 1.0;
-    let atrPeriod = 14;
-    let monthlyProfitLimit = "100"; // Percentage of monthly profit risked
-    let riskRewardMin = 1.5; // Minimum risk-to-reward ratio
-    
-    // Monthly profit tracking
-    let monthlyProfits = {}; // Will track profits by year and month
-    let totalMonthlyProfit = 0; // Current month's profit
-    
-    // Initialize application
+    // Start loading data
     initApp();
-    
-    async function initApp() {
-        console.log("Initializing app");
-        try {
-            // Show loading indicator
-            dataLoading.style.display = 'block';
-            
-            // Load data
-            await loadData();
-            console.log("Data loaded successfully");
-            
-            // Hide loading indicator
-            dataLoading.style.display = 'none';
-            
-            // Set up event listeners
-            setupEventListeners();
-            
-            // Run simulation for most recent year by default
-            if (years.length > 0) {
-                const latestYear = years[years.length - 1];
-                if (yearSelect) {
-                    yearSelect.value = latestYear;
-                    runSimulation();
-                } else {
-                    console.error("Year select element not found");
-                }
-            } else {
-                console.error("No years available in the data");
-            }
-        } catch (error) {
-            console.error('Error initializing app:', error);
-            alert('Error loading application data: ' + error.message);
-        }
+});
+
+// Check if a time is during market hours (9:30 AM - 4:00 PM)
+// Always returns true if debug mode is enabled
+function isDuringMarketHours(date) {
+    // Always return true in debug mode
+    if (window.MARKET_HOURS_DEBUG_MODE) {
+        return true;
     }
     
-    async function loadData() {
-        try {
-            // Show loading indicator progress
-            if (loadingBar) loadingBar.value = 10;
-            if (loadingProgress) loadingProgress.textContent = '10%';
+    // Simple check for null/invalid dates
+    if (!date || !(date instanceof Date) || isNaN(date.getTime())) {
+        return false;
+    }
+    
+    const hours = date.getHours();
+    const minutes = date.getMinutes();
+    
+    // Market hours: 9:30 AM to 4:00 PM
+    return (hours === 9 && minutes >= 30) || (hours > 9 && hours < 16);
+}
+
+// Find the market open candle (9:30 AM) for a trading day
+function findMarketOpenCandle(dayCandles) {
+    if (!dayCandles || dayCandles.length === 0) return null;
+    
+    // Sort candles by time
+    const sortedCandles = [...dayCandles].sort((a, b) => a.datetime - b.datetime);
+    
+    // Find the first candle at or after market open time (9:30 AM)
+    return sortedCandles.find(candle => {
+        const hours = candle.datetime.getHours();
+        const minutes = candle.datetime.getMinutes();
+        return hours === window.marketOpenHour && minutes === window.marketOpenMinute;
+    });
+}
+
+// Set up tab functionality
+function setupTabs() {
+    if (!window.tabButtons || !window.tabContents) return;
+    
+    window.tabButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            // Get the tab to show
+            const tabId = this.getAttribute('data-tab') + '-tab';
             
-            // Fetch the actual SPY data file
-            if (loadingProgress) loadingProgress.textContent = '20%';
-            if (loadingBar) loadingBar.value = 20;
+            // Remove active class from all buttons and tabs
+            window.tabButtons.forEach(btn => btn.classList.remove('active'));
+            window.tabContents.forEach(content => content.style.display = 'none');
             
-            console.log("Fetching SPY data file...");
-            const response = await fetch('SPY_full_1hour_adjsplit.txt');
+            // Add active class to current button and show corresponding tab
+            this.classList.add('active');
+            document.getElementById(tabId).style.display = 'block';
+        });
+    });
+}
+
+// Set up strategy parameter change handlers
+function setupParameterChangeHandlers() {
+    // Range requirement
+    if (window.rangeSelect) {
+        window.rangeSelect.addEventListener('change', function() {
+            window.rangeRequirement = parseFloat(this.value);
+        });
+    }
+    
+    // Profit target
+    if (window.profitTargetSelect) {
+        window.profitTargetSelect.addEventListener('change', function() {
+            window.profitTarget = parseFloat(this.value);
+        });
+    }
+    
+    // Max trades per day
+    if (window.maxTradesPerDaySelect) {
+        window.maxTradesPerDaySelect.addEventListener('change', function() {
+            window.maxTradesPerDay = parseInt(this.value);
+        });
+    }
+    
+    // Position size
+    if (window.positionSizeSelect) {
+        window.positionSizeSelect.addEventListener('change', function() {
+            window.positionSize = parseInt(this.value);
+        });
+    }
+    
+    // Exit strategy
+    if (window.exitStrategySelect) {
+        window.exitStrategySelect.addEventListener('change', function() {
+            window.exitStrategy = this.value;
             
-            if (!response.ok) {
-                throw new Error(`Failed to load data file: ${response.status} ${response.statusText}`);
+            // Show/hide RSI controls based on exit strategy
+            const rsiControls = document.querySelectorAll('.rsi-controls');
+            if (window.exitStrategy === 'rsi') {
+                rsiControls.forEach(el => el.style.display = 'flex');
+            } else {
+                rsiControls.forEach(el => el.style.display = 'none');
             }
-            
-            if (loadingProgress) loadingProgress.textContent = '50%';
-            if (loadingBar) loadingBar.value = 50;
-            
-            console.log("Reading SPY data file...");
-            const csvText = await response.text();
-            console.log(`Data file size: ${csvText.length} bytes`);
-            
-            if (loadingProgress) loadingProgress.textContent = '70%';
-            if (loadingBar) loadingBar.value = 70;
-            
-            // Verify Papa Parse is available
-            if (typeof Papa === 'undefined') {
-                throw new Error("Papa Parse library not loaded");
-            }
-            
-            // Parse the CSV data
-            console.log("Parsing CSV data...");
-            Papa.parse(csvText, {
-                header: false,
-                dynamicTyping: true,
-                skipEmptyLines: true,
-                delimiter: ",", // Explicitly set the delimiter to comma
-                complete: function(results) {
-                    console.log(`CSV parsing complete: ${results.data.length} rows`);
-                    
-                    if (results.errors && results.errors.length > 0) {
-                        console.error("CSV parsing errors:", results.errors);
-                        return;
-                    }
-                    
-                    // Process the data - format matches:
-                    // datetime, open, high, low, close, volume
-                    fullData = results.data.map(row => {
-                        try {
-                            return {
-                                datetime: new Date(row[0]),
-                                open: parseFloat(row[1]),
-                                high: parseFloat(row[2]),
-                                low: parseFloat(row[3]),
-                                close: parseFloat(row[4]),
-                                volume: parseInt(row[5]),
-                                date: new Date(new Date(row[0]).setHours(0, 0, 0, 0)),
-                                time: row[0].split(' ')[1].substring(0, 5)
-                            };
-                        } catch (error) {
-                            console.error("Error processing row:", row, error);
-                            return null;
-                        }
-                    }).filter(row => row !== null); // Remove any rows that failed to process
-                    
-                    console.log(`Processed ${fullData.length} valid data points`);
-                    if (fullData.length > 0) {
-                        console.log("Sample data point:", fullData[0]);
-                    }
-                    
-                    if (loadingProgress) loadingProgress.textContent = '90%';
-                    if (loadingBar) loadingBar.value = 90;
-                    
-                    // Continue with data processing
-                    processData();
-                    populateYears();
-                    
-                    if (loadingProgress) loadingProgress.textContent = '100%';
-                    if (loadingBar) loadingBar.value = 100;
-                },
-                error: function(error) {
-                    console.error('Error parsing CSV:', error);
-                    alert('Error parsing the data file. Please check if the file format is correct.');
-                }
+        });
+        
+        // Trigger change to set initial visibility
+        window.exitStrategySelect.dispatchEvent(new Event('change'));
+    }
+    
+    // RSI parameters
+    if (window.rsiOverboughtSelect) {
+        window.rsiOverboughtSelect.addEventListener('change', function() {
+            window.rsiOverbought = parseInt(this.value);
+        });
+    }
+    
+    if (window.rsiOversoldSelect) {
+        window.rsiOversoldSelect.addEventListener('change', function() {
+            window.rsiOversold = parseInt(this.value);
+        });
+    }
+    
+    if (window.rsiPeriodSelect) {
+        window.rsiPeriodSelect.addEventListener('change', function() {
+            window.rsiPeriod = parseInt(this.value);
+        });
+    }
+    
+    // Additional trade parameters
+    if (window.breakoutPointsSelect) {
+        window.breakoutPointsSelect.addEventListener('change', function() {
+            window.breakoutPoints = parseFloat(this.value);
+        });
+    }
+    
+    if (window.barsLookbackSelect) {
+        window.barsLookbackSelect.addEventListener('change', function() {
+            window.barsLookback = parseInt(this.value);
+        });
+    }
+}
+
+// Initialize the application
+async function initApp() {
+    console.log("Initializing app");
+    try {
+        // Keep loading indicator hidden
+        if (window.dataLoading) window.dataLoading.style.display = 'none';
+        
+        // Load data
+        await loadData();
+        console.log("Data loaded successfully");
+        
+        // Hide loading indicator
+        if (window.dataLoading) window.dataLoading.style.display = 'none';
+        
+        // Set up event listeners
+        if (window.runButton) {
+            window.runButton.addEventListener('click', function() {
+                console.log("Run button clicked");
+                runSimulation();
             });
-            
-        } catch (error) {
-            console.error('Error loading data:', error);
-            alert('Could not load the SPY data file. Please make sure "SPY_full_1hour_adjsplit.txt" exists in the same directory as the HTML file.');
-            throw error;
-        }
-    }
-    
-    // Function to calculate ATR (Average True Range)
-    function calculateATR(data, period) {
-        // Calculate true range for each candle
-        for (let i = 0; i < data.length; i++) {
-            const candle = data[i];
-            
-            if (i === 0) {
-                // First candle TR is just the high-low range
-                candle.tr = candle.high - candle.low;
-            } else {
-                // True Range is the greatest of:
-                // 1. Current High - Current Low
-                // 2. |Current High - Previous Close|
-                // 3. |Current Low - Previous Close|
-                const prevClose = data[i-1].close;
-                const highLowRange = candle.high - candle.low;
-                const highPrevCloseRange = Math.abs(candle.high - prevClose);
-                const lowPrevCloseRange = Math.abs(candle.low - prevClose);
-                
-                candle.tr = Math.max(highLowRange, highPrevCloseRange, lowPrevCloseRange);
-            }
         }
         
-        // Calculate ATR using the specified period
-        for (let i = 0; i < data.length; i++) {
-            const candle = data[i];
-            
-            if (i < period) {
-                // Not enough data for full ATR calculation yet
-                // Use simple average of true ranges
-                const trSum = data.slice(0, i + 1).reduce((sum, c) => sum + c.tr, 0);
-                candle.atr = trSum / (i + 1);
-            } else {
-                // ATR is smoothed using Wilder's smoothing method
-                // ATR = ((Previous ATR * (period - 1)) + Current TR) / period
-                const prevATR = data[i-1].atr;
-                candle.atr = ((prevATR * (period - 1)) + candle.tr) / period;
-            }
-        }
+        // Update UI
+        console.log("App initialized successfully");
+        
+    } catch (error) {
+        console.error('Error initializing app:', error);
+        if (window.dataLoading) window.dataLoading.style.display = 'none';
+        alert('Error loading application: ' + error.message);
     }
-    
-    function processData() {
+}
+
+// Load and process data
+async function loadData() {
+    try {
+        // Update loading progress
+        if (window.loadingProgress) window.loadingProgress.textContent = '20%';
+        if (window.loadingBar) window.loadingBar.value = 20;
+        
+        console.log("Fetching SPY data file...");
+        const response = await fetch('SPY_full_5min_adjsplit.txt');
+        
+        if (!response.ok) {
+            throw new Error(`Failed to load data file: ${response.status} ${response.statusText}`);
+        }
+        
+        if (window.loadingProgress) window.loadingProgress.textContent = '50%';
+        if (window.loadingBar) window.loadingBar.value = 50;
+        
+        const csvText = await response.text();
+        console.log(`Data file loaded: ${csvText.length} bytes`);
+        
+        // Process the data
         console.log("Processing data...");
-        // Extract unique years
-        years = [...new Set(fullData.map(d => d.datetime.getFullYear()))].sort();
-        console.log("Years found in data:", years);
+        processCSV(csvText);
         
-        // Group data by date
-        const dataByDate = {};
-        fullData.forEach(row => {
-            const dateStr = row.date.toISOString().split('T')[0];
-            if (!dataByDate[dateStr]) {
-                dataByDate[dateStr] = [];
-            }
-            dataByDate[dateStr].push(row);
-        });
+        // Update UI
+        if (window.loadingProgress) window.loadingProgress.textContent = '100%';
+        if (window.loadingBar) window.loadingBar.value = 100;
         
-        // Initialize trading variables and identify first candles
-        const dates = Object.keys(dataByDate).sort();
+        return true;
         
-        console.log(`Processing ${dates.length} trading days`);
-        
-        dates.forEach((dateStr, dateIndex) => {
-            const candles = dataByDate[dateStr];
-            
-            // Sort candles by time
-            candles.sort((a, b) => a.datetime - b.datetime);
-            
-            // Mark first candle of the day
-            candles.forEach((candle, i) => {
-                candle.is_first_candle = (i === 0);
-                
-                // Calculate candle range
-                candle.candle_range = candle.high - candle.low;
-                
-                // Initialize trading variables
-                candle.signal = 0;
-                candle.position = 0;
-                candle.entry_price = null;
-                candle.stop_price = null;
-                candle.target_price = null;
-                candle.exit_reason = '';
-                candle.trade_pnl = 0;
-                
-                // Get previous day's close if this is the first candle
-                if (candle.is_first_candle && dateIndex > 0) {
-                    const prevDateCandles = dataByDate[dates[dateIndex - 1]];
-                    if (prevDateCandles && prevDateCandles.length > 0) {
-                        // Get the last candle of the previous day
-                        const lastCandle = prevDateCandles[prevDateCandles.length - 1];
-                        candle.prev_day_close = lastCandle.close;
-                    } else {
-                        candle.prev_day_close = null;
-                    }
-                } else {
-                    candle.prev_day_close = null;
-                }
-            });
-        });
-        
-        console.log("Data processing complete");
+    } catch (error) {
+        console.error('Error loading data:', error);
+        alert('Could not load the SPY data file: ' + error.message);
+        throw error;
     }
+}
+
+// Process CSV data
+function processCSV(csvText) {
+    const lines = csvText.split('\n');
+    console.log(`Processing ${lines.length} lines of data`);
     
-    function populateYears() {
-        if (!yearSelect) {
-            console.error("Year select element not found");
-            return;
+    // Clear existing data
+    window.fullData = [];
+    window.marketOpenCandles = [];
+    
+    // Track market hours candles count
+    let marketHoursCount = 0;
+    
+    // Process each line
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+        
+        const parts = line.split(',');
+        if (parts.length < 6) continue;
+        
+        // Parse the date and time - SIMPLE approach
+        const dateTimeStr = parts[0];
+        const [datePart, timePart] = dateTimeStr.split(' ');
+        const [year, month, day] = datePart.split('-').map(Number);
+        const [hours, minutes, seconds] = timePart.split(':').map(Number);
+        
+        // Create Date object (month is 0-indexed in JavaScript)
+        const date = new Date(year, month-1, day, hours, minutes, seconds);
+        
+        // Check if it's during market hours - always true in debug mode
+        const duringMarketHours = isDuringMarketHours(date);
+        
+        // Check if it's a market open candle (9:30 AM)
+        if (hours === 9 && minutes === 30) {
+            window.marketOpenCandles.push(dateTimeStr);
+            console.log(`Found market open candle: ${dateTimeStr}`);
         }
         
-        // Clear existing options
-        yearSelect.innerHTML = '';
+        // Parse other values
+        const open = parseFloat(parts[1]);
+        const high = parseFloat(parts[2]);
+        const low = parseFloat(parts[3]);
+        const close = parseFloat(parts[4]);
+        const volume = parseInt(parts[5]);
         
-        // Add an option for each year
-        years.forEach(year => {
+        if (isNaN(open) || isNaN(high) || isNaN(low) || isNaN(close)) {
+            continue; // Skip invalid data
+        }
+        
+        // Create candle object
+        const candle = {
+            datetime: date,
+            rawTimeStr: dateTimeStr,
+            open: open,
+            high: high,
+            low: low,
+            close: close,
+            volume: volume,
+            duringMarketHours: duringMarketHours
+        };
+        
+        // Store the candle
+        window.fullData.push(candle);
+        
+        // Count market hours candles
+        if (duringMarketHours) {
+            marketHoursCount++;
+        }
+        
+        // Update progress for large datasets
+        if (i % 5000 === 0) {
+            const progress = Math.min(90, 50 + Math.floor((i / lines.length) * 40));
+            if (window.loadingProgress) window.loadingProgress.textContent = `${progress}%`;
+            if (window.loadingBar) window.loadingBar.value = progress;
+        }
+    }
+    
+    // Extract years from the data
+    window.years = [...new Set(window.fullData.map(d => d.datetime.getFullYear()))].sort();
+    
+    // Log market hours statistics
+    console.log(`Total candles: ${window.fullData.length}`);
+    console.log(`Market hours candles: ${marketHoursCount} (${((marketHoursCount/window.fullData.length)*100).toFixed(1)}%)`);
+    console.log(`Market open (9:30 AM) candles: ${window.marketOpenCandles.length}`);
+    
+    // Check if we have market hours data
+    if (marketHoursCount === 0) {
+        console.warn("No candles found during market hours (9:30 AM - 4:00 PM)");
+        console.warn("Debug mode is enabled - all candles will be treated as during market hours");
+        
+        // Ensure all candles are marked as during market hours
+        window.fullData.forEach(candle => {
+            candle.duringMarketHours = true;
+        });
+    }
+    
+    // Sort data by time
+    window.fullData.sort((a, b) => a.datetime - b.datetime);
+    
+    // Populate year dropdown
+    if (window.yearSelect) {
+        window.yearSelect.innerHTML = '';
+        window.years.forEach(year => {
             const option = document.createElement('option');
             option.value = year;
             option.textContent = year;
-            yearSelect.appendChild(option);
+            window.yearSelect.appendChild(option);
+        });
+    }
+    
+    console.log("Data processing complete");
+}
+
+// Run the simulation
+function runSimulation() {
+    console.log("Running simulation...");
+    try {
+        // Clear previous trades
+        window.trades = [];
+        
+        // Get selected parameters
+        const selectedYear = window.yearSelect ? parseInt(window.yearSelect.value) : window.years[0];
+        
+        // Get all parameters from the UI selects
+        window.maxTradesPerDay = parseInt(window.maxTradesPerDaySelect.value);
+        window.rangeRequirement = parseFloat(window.rangeSelect.value);
+        window.profitTarget = parseFloat(window.profitTargetSelect.value);
+        window.positionSize = parseInt(window.positionSizeSelect.value);
+        window.breakoutPoints = parseFloat(window.breakoutPointsSelect.value);
+        window.barsLookback = parseInt(window.barsLookbackSelect.value);
+        
+        console.log(`Running simulation for year: ${selectedYear}`);
+        console.log(`Parameters: Max trades per day: ${window.maxTradesPerDay}, Range: ${window.rangeRequirement}, Profit Target: ${window.profitTarget}`);
+        console.log(`Additional trade parameters: Breakout: ${window.breakoutPoints} points, Bars lookback: ${window.barsLookback}`);
+        
+        // Filter data for the selected year
+        const yearData = window.fullData.filter(d => d.datetime.getFullYear() === selectedYear);
+        console.log(`Found ${yearData.length} data points for year ${selectedYear}`);
+        
+        // Group data by days
+        const days = {};
+        yearData.forEach(candle => {
+            const dateStr = candle.datetime.toISOString().split('T')[0];
+            if (!days[dateStr]) {
+                days[dateStr] = [];
+            }
+            days[dateStr].push(candle);
         });
         
-        console.log("Year select populated with", years.length, "years");
-    }
-    
-    function setupEventListeners() {
-        try {
-            console.log("Setting up event listeners");
+        console.log(`Found ${Object.keys(days).length} trading days for ${selectedYear}`);
+        
+        // Reset monthly profits
+        window.monthlyProfits = {};
+        
+        // Process each day in order
+        const dayKeys = Object.keys(days).sort();
+        
+        // Need previous day's close for entry conditions
+        let previousDayClose = null;
+        
+        // Process each day
+        dayKeys.forEach((dateStr, index) => {
+            const dayCandles = days[dateStr];
             
-            // Run simulation when button is clicked
-            if (runButton) {
-                runButton.addEventListener('click', runSimulation);
-                console.log("Run button listener attached");
+            // Sort candles by time
+            dayCandles.sort((a, b) => a.datetime - b.datetime);
+            
+            // Get market hours candles
+            const marketHoursCandles = dayCandles.filter(c => c.duringMarketHours);
+            
+            if (marketHoursCandles.length === 0) {
+                console.log(`No market hours data for ${dateStr}, skipping day`);
+                return;
+            }
+            
+            // Find market open candle (9:30 AM)
+            const marketOpenCandle = findMarketOpenCandle(dayCandles);
+            
+            if (!marketOpenCandle) {
+                console.log(`No market open candle found for ${dateStr}, skipping day`);
+                return;
+            }
+            
+            // Check if we have previous day's close
+            if (previousDayClose === null && index > 0) {
+                // Try to get previous day's close
+                const prevDayCandles = days[dayKeys[index - 1]];
+                if (prevDayCandles && prevDayCandles.length > 0) {
+                    // Sort by time and get the last candle
+                    prevDayCandles.sort((a, b) => a.datetime - b.datetime);
+                    previousDayClose = prevDayCandles[prevDayCandles.length - 1].close;
+                }
+            }
+            
+            // If we still don't have previous day's close, skip this day
+            if (previousDayClose === null) {
+                console.log(`No previous day's close available for ${dateStr}, skipping day`);
+                previousDayClose = marketHoursCandles[marketHoursCandles.length - 1].close;
+                return;
+            }
+            
+            // Calculate range of market open candle
+            const openCandleRange = marketOpenCandle.high - marketOpenCandle.low;
+            
+            // Check if range requirement is met
+            if (openCandleRange < window.rangeRequirement) {
+                console.log(`Market open candle range (${openCandleRange.toFixed(2)}) < requirement (${window.rangeRequirement}), skipping day`);
+                // Update previous day's close
+                previousDayClose = marketHoursCandles[marketHoursCandles.length - 1].close;
+                return;
+            }
+            
+            // Create date string in YYYY-MM-DD format for comparison
+            const dateParts = dateStr.split('T')[0];
+            
+            // Count existing trades for this exact day
+            const tradesForThisDay = window.trades.filter(trade => {
+                // Convert trade entry date to YYYY-MM-DD string for comparison
+                const tradeDate = trade.entryDate.toISOString().split('T')[0];
+                return tradeDate === dateParts;
+            }).length;
+            
+            // Skip if we've reached the maximum trades per day (unless unlimited)
+            if (window.maxTradesPerDay > 0 && tradesForThisDay >= window.maxTradesPerDay) {
+                console.log(`Maximum trades per day (${window.maxTradesPerDay}) reached for ${dateStr}, skipping`);
+                // Update previous day's close
+                previousDayClose = marketHoursCandles[marketHoursCandles.length - 1].close;
+                return;
+            }
+            
+            // Determine entry signal
+            let position = null; // 'long' or 'short'
+            
+            if (marketOpenCandle.close > previousDayClose) {
+                position = 'long';
+            } else if (marketOpenCandle.close < previousDayClose) {
+                position = 'short';
             } else {
-                console.error("Run button not found");
-            }
-            
-            // Also run when year selection changes
-            if (yearSelect) {
-                yearSelect.addEventListener('change', function() {
-                    // Reset monthly profit tracking when year changes
-                    monthlyProfits = {};
-                    totalMonthlyProfit = 0;
-                    runSimulation();
-                });
-                console.log("Year select listener attached");
-            }
-            
-            // Update range requirement when selection changes
-            if (rangeSelect) {
-                rangeSelect.addEventListener('change', function() {
-                    rangeRequirement = parseFloat(rangeSelect.value);
-                    runSimulation();
-                });
-                console.log("Range select listener attached");
-            }
-            
-            // Update profit target when selection changes
-            if (profitTargetSelect) {
-                profitTargetSelect.addEventListener('change', function() {
-                    profitTarget = parseFloat(profitTargetSelect.value);
-                    runSimulation();
-                });
-                console.log("Profit target select listener attached");
-            }
-            
-            // Add listeners for exit strategy parameters
-            const parameterIds = [
-                'exit-strategy',
-                'atr-multiplier', 
-                'atr-period', 
-                'monthly-profit-limit', 
-                'risk-reward-min'
-            ];
-            
-            // Set up each listener safely
-            parameterIds.forEach(id => {
-                const element = document.getElementById(id);
-                if (element) {
-                    element.addEventListener('change', function() {
-                        // If exit strategy changes, we need to update the UI
-                        if (id === 'exit-strategy') {
-                            updateExitStrategyControls();
-                        }
-                        runSimulation();
-                    });
-                    console.log(`${id} listener attached`);
-                } else {
-                    console.log(`${id} element not found, skipping listener`);
-                }
-            });
-            
-            // Initialize exit strategy controls visibility
-            updateExitStrategyControls();
-            
-            // Make the results tab active by default
-            const resultsTab = document.getElementById('results-tab');
-            if (resultsTab) {
-                resultsTab.style.display = 'block';
-            }
-            
-            // Tab navigation
-            const tabButtons = document.querySelectorAll('.tab-button');
-            const tabContents = document.querySelectorAll('.tab-content');
-            
-            tabButtons.forEach(button => {
-                button.addEventListener('click', function() {
-                    const tabName = this.getAttribute('data-tab');
-                    
-                    // Remove active class from all buttons and tabs
-                    tabButtons.forEach(btn => btn.classList.remove('active'));
-                    tabContents.forEach(content => content.style.display = 'none');
-                    
-                    // Add active class to current button and show its content
-                    this.classList.add('active');
-                    document.getElementById(`${tabName}-tab`).style.display = 'block';
-                    
-                    // If analytics tab is selected, update the monthly analytics chart
-                    if (tabName === 'analytics') {
-                        updateMonthlyAnalytics();
-                    }
-                });
-            });
-            
-            console.log("Event listeners setup complete");
-        } catch (error) {
-            console.error("Error setting up event listeners:", error);
-        }
-    }
-    
-    function runSimulation() {
-        console.log("Running simulation...");
-        try {
-            // Get current parameter values
-            let selectedYear = parseInt(yearSelect.value);
-            
-            if (isNaN(selectedYear) && years.length > 0) {
-                selectedYear = years[years.length - 1];
-                console.log("Invalid year, using latest:", selectedYear);
-            }
-            
-            // Get parameters from UI with fallbacks
-            rangeRequirement = rangeSelect ? parseFloat(rangeSelect.value) : 2.0;
-            
-            const ptSelect = document.getElementById('profit-target-select');
-            profitTarget = ptSelect ? parseFloat(ptSelect.value) : 20.0;
-            
-            // Get exit strategy
-            const exitStrategyEl = document.getElementById('exit-strategy');
-            exitStrategy = exitStrategyEl ? exitStrategyEl.value : 'atr';
-            
-            // Safely update ATR-based stop loss parameters with default fallbacks
-            const atrMultiplierEl = document.getElementById('atr-multiplier');
-            atrMultiplier = atrMultiplierEl ? parseFloat(atrMultiplierEl.value) : 1.0;
-            
-            const atrPeriodEl = document.getElementById('atr-period');
-            atrPeriod = atrPeriodEl ? parseInt(atrPeriodEl.value) : 14;
-            
-            const monthlyProfitLimitEl = document.getElementById('monthly-profit-limit');
-            monthlyProfitLimit = monthlyProfitLimitEl ? monthlyProfitLimitEl.value : 'off';
-            
-            const riskRewardMinEl = document.getElementById('risk-reward-min');
-            riskRewardMin = riskRewardMinEl ? parseFloat(riskRewardMinEl.value) : 0;
-            
-            console.log("Simulation parameters:", {
-                year: selectedYear,
-                rangeRequirement,
-                profitTarget,
-                exitStrategy,
-                atrMultiplier,
-                atrPeriod,
-                monthlyProfitLimit,
-                riskRewardMin
-            });
-            
-            // Reset monthly profit tracking if year changes
-            if (!monthlyProfits[selectedYear]) {
-                monthlyProfits[selectedYear] = {};
-            }
-            
-            // Filter data for selected year
-            const yearData = fullData.filter(d => d.datetime.getFullYear() === selectedYear);
-            console.log(`Filtered ${yearData.length} data points for year ${selectedYear}`);
-            
-            if (yearData.length === 0) {
-                console.error("No data found for selected year");
+                console.log(`Market open candle close equals previous day's close, skipping day`);
+                // Update previous day's close
+                previousDayClose = marketHoursCandles[marketHoursCandles.length - 1].close;
                 return;
             }
             
-            // Calculate ATR for all data
-            calculateATR(yearData, atrPeriod);
+            console.log(`${dateStr} entry signal: ${position} at ${marketOpenCandle.close.toFixed(2)}`);
             
-            // Run the trading algorithm
-            console.log("Running trading algorithm...");
-            const { yearTrades, tradingResults } = runTradingAlgorithm(yearData);
+            // Process first trade for the day (first candle after market open)
+            processTrade(marketOpenCandle, marketHoursCandles, position, previousDayClose, true);
             
-            // Update the UI with results
-            console.log("Updating UI with results...");
-            updateCharts(yearData, yearTrades);
-            updateStatistics(tradingResults);
-            updateTradesTable(yearTrades);
-            updateMonthlyAnalytics(); // Update monthly analytics
-            console.log("Simulation complete!");
-        } catch (error) {
-            console.error('Error running simulation:', error);
-        }
-    }
-    
-    function runTradingAlgorithm(data) {
-        // Reset trades for this simulation
-        const yearTrades = [];
+            // Look for additional trades during the day if maxTradesPerDay allows
+            if (window.maxTradesPerDay !== 1) {
+                findAdditionalTrades(marketHoursCandles, dateStr);
+            }
+            
+            // Update previous day's close
+            previousDayClose = marketHoursCandles[marketHoursCandles.length - 1].close;
+        });
         
-        try {
-            // Group data by date
-            const dataByDate = {};
-            data.forEach(row => {
-                const dateStr = row.date.toISOString().split('T')[0];
-                if (!dataByDate[dateStr]) {
-                    dataByDate[dateStr] = [];
-                }
-                dataByDate[dateStr].push(row);
-            });
-            
-            // Process each date
-            const dates = Object.keys(dataByDate).sort();
-            
-            console.log(`Analyzing ${dates.length} trading days in selected year`);
-            
-            dates.forEach(dateStr => {
-                const dayCandles = dataByDate[dateStr].sort((a, b) => a.datetime - b.datetime);
-                
-                // Skip days with no candles
-                if (dayCandles.length === 0) return;
-                
-                // Get the first candle of the day
-                const firstCandle = dayCandles[0];
-                
-                // Extract month from the date for monthly profit tracking
-                const dateObj = new Date(dateStr);
-                const year = dateObj.getFullYear();
-                const month = dateObj.getMonth();
-                
-                // Initialize monthly tracking if not already done
-                if (!monthlyProfits[year]) {
-                    monthlyProfits[year] = {};
-                }
-                
-                if (!monthlyProfits[year][month]) {
-                    monthlyProfits[year][month] = {
-                        profit: 0,
-                        lossLimit: 0,
-                        trades: 0,
-                        winCount: 0,
-                        wins: 0,   // Total winning amount
-                        losses: 0   // Total losing amount (positive value)
-                    };
-                }
-                
-                // Get monthly profit data
-                const monthlyData = monthlyProfits[year][month];
-                
-                // Check entry conditions
-                if (firstCandle.is_first_candle && 
-                    firstCandle.candle_range >= rangeRequirement && 
-                    firstCandle.prev_day_close !== null && 
-                    firstCandle.close !== firstCandle.prev_day_close) {
-                    
-                    // Skip trade if we've lost more than our monthly profit limit allows
-                    let monthlyCheck = true;
-                    
-                    try {
-                        if (monthlyProfitLimit && monthlyProfitLimit !== 'off') {
-                            const profitLimitPercentage = parseInt(monthlyProfitLimit) / 100;
-                            const maxLossThisMonth = monthlyData.profit * profitLimitPercentage;
-                            
-                            // If we've already hit our allowed loss limit for the month, skip this trade
-                            if (monthlyData.profit > 0 && monthlyData.lossLimit >= maxLossThisMonth) {
-                                console.log(`SKIP TRADE on ${dateStr}: Monthly profit protection active. Current profit: $${monthlyData.profit.toFixed(2)}, Losses used: $${monthlyData.lossLimit.toFixed(2)}, Max allowed: $${maxLossThisMonth.toFixed(2)}`);
-                                monthlyCheck = false;
-                            }
-                        }
-                    } catch (error) {
-                        console.error("Error in monthly profit check:", error);
-                        monthlyCheck = true; // Continue with trade if there's an error
-                    }
-                    
-                    // Determine direction
-                    const isLong = firstCandle.close > firstCandle.prev_day_close;
-                    const direction = isLong ? 'Long' : 'Short';
-                    
-                    // Calculate ATR-based stop loss
-                    let atrStopPrice = null;
-                    let riskRewardCheck = true;
-                    
-                    try {
-                        if (firstCandle.atr) {
-                            const atrStopDistance = firstCandle.atr * atrMultiplier;
-                            atrStopPrice = isLong ? firstCandle.close - atrStopDistance : firstCandle.close + atrStopDistance;
-                            
-                            // Calculate risk in dollars
-                            const risk = Math.abs(firstCandle.close - atrStopPrice) * (10000 / firstCandle.close);
-                            
-                            // Calculate potential reward in dollars
-                            const rewardPrice = isLong ? (firstCandle.close + profitTarget) : (firstCandle.close - profitTarget);
-                            const reward = Math.abs(firstCandle.close - rewardPrice) * (10000 / firstCandle.close);
-                            
-                            // Calculate risk-reward ratio
-                            const riskRewardRatio = reward / risk;
-                            
-                            // Skip trade if risk-reward ratio is below minimum
-                            if (riskRewardMin > 0 && riskRewardRatio < riskRewardMin) {
-                                console.log(`SKIP TRADE on ${dateStr}: Risk-reward ratio ${riskRewardRatio.toFixed(2)} below minimum ${riskRewardMin}`);
-                                riskRewardCheck = false;
-                            }
-                        }
-                    } catch (error) {
-                        console.error("Error in risk-reward calculation:", error);
-                        riskRewardCheck = true; // Continue with trade if there's an error in calculation
-                        // Use standard stop if ATR stop calculation fails
-                        atrStopPrice = null;
-                    }
-                    
-                    if (!monthlyCheck || !riskRewardCheck) {
-                        return; // Skip this trade
-                    }
-                    
-                    console.log(`ENTRY on ${dateStr}: ${direction} at ${firstCandle.close.toFixed(2)}`);
-                    
-                    // Set up trade parameters
-                    const entryPrice = firstCandle.close;
-                    
-                    let stopPrice;
-                    let stopType = '';
-                    
-                    // Determine stop price based on exit strategy
-                    if (exitStrategy === 'atr' && atrStopPrice) {
-                        // Use ATR-based stop
-                        stopPrice = atrStopPrice;
-                        stopType = 'ATR-Based';
-                    } else {
-                        // Use default strategy: first candle's low/high as stop
-                        stopPrice = isLong ? firstCandle.low : firstCandle.high;
-                        stopType = 'Default';
-                    }
-                    
-                    // Set profit target
-                    const targetPrice = isLong ? (entryPrice + profitTarget) : (entryPrice - profitTarget);
-                    
-                    // Mark the entry on first candle
-                    firstCandle.position = isLong ? 1 : -1;
-                    firstCandle.entry_price = entryPrice;
-                    firstCandle.stop_price = stopPrice;
-                    firstCandle.target_price = targetPrice;
-                    
-                    console.log(`Trade details: Entry=${entryPrice.toFixed(2)}, Stop=${stopPrice.toFixed(2)} (${stopType}), Target=${targetPrice.toFixed(2)}`);
-                    
-                    // Track if trade has been exited
-                    let isExited = false;
-                    let exitPrice = null;
-                    let exitCandle = null;
-                    let exitReason = '';
-                    
-                    // Initialize tracking variables for this trade
-                    let entryTime = firstCandle.datetime;
-                    
-                    // Process subsequent candles for exit conditions
-                    for (let i = 1; i < dayCandles.length; i++) {
-                        const currentCandle = dayCandles[i];
-                        
-                        // Continue tracking position until exit
-                        if (!isExited) {
-                            currentCandle.position = isLong ? 1 : -1;
-                            currentCandle.entry_price = entryPrice;
-                            currentCandle.stop_price = stopPrice;
-                            currentCandle.target_price = targetPrice;
-                            
-                            // Check for stop loss conditions based on the strategy
-                            let stopLossTriggered;
-                            
-                            if (exitStrategy === 'default') {
-                                // Default Strategy: 
-                                // - For Long: Exit if any following 1-hour candle breaks below the first 1-hour candle's low
-                                // - For Short: Exit if any following 1-hour candle breaks above the first 1-hour candle's high
-                                stopLossTriggered = 
-                                    (isLong && currentCandle.low <= firstCandle.low) ||
-                                    (!isLong && currentCandle.high >= firstCandle.high);
-                            } else {
-                                // ATR-based Strategy: Use the calculated stop price
-                                stopLossTriggered = 
-                                    (isLong && currentCandle.low <= stopPrice) ||
-                                    (!isLong && currentCandle.high >= stopPrice);
-                            }
-                            
-                            // Set exit price to the stop price if triggered
-                            if (stopLossTriggered) {
-                                exitPrice = stopPrice;
-                            }
-                            
-                            // Check for stop loss exit
-                            if (stopLossTriggered) {
-                                isExited = true;
-                                exitCandle = currentCandle;
-                                exitReason = 'Stop Loss';
-                                
-                                // Mark the exit on this candle
-                                currentCandle.position = 0;
-                                currentCandle.exit_reason = exitReason;
-                                
-                                console.log(`EXIT on ${currentCandle.datetime.toISOString()}: ${exitReason} at ${exitPrice.toFixed(2)}`);
-                            }
-                            // Check profit target
-                            else if ((isLong && currentCandle.high >= targetPrice) || 
-                                    (!isLong && currentCandle.low <= targetPrice)) {
-                                // Profit target hit
-                                isExited = true;
-                                exitPrice = targetPrice;
-                                exitCandle = currentCandle;
-                                exitReason = 'Profit Target';
-                                
-                                // Mark the exit on this candle
-                                currentCandle.position = 0;
-                                currentCandle.exit_reason = exitReason;
-                                
-                                console.log(`EXIT on ${currentCandle.datetime.toISOString()}: Profit Target at ${exitPrice.toFixed(2)}`);
-                            }
-                        } else {
-                            // Position already exited
-                            currentCandle.position = 0;
-                        }
-                    }
-                    
-                    // If neither condition is met during the day, exit at the last 1-hour candle's close
-                    if (!isExited && dayCandles.length > 1) {
-                        const lastCandle = dayCandles[dayCandles.length - 1];
-                        isExited = true;
-                        exitPrice = lastCandle.close;
-                        exitCandle = lastCandle;
-                        exitReason = 'End of Day';
-                        
-                        // Mark the exit on the last candle
-                        lastCandle.position = 0;
-                        lastCandle.exit_reason = exitReason;
-                        
-                        console.log(`EXIT on ${lastCandle.datetime.toISOString()}: End of Day at ${exitPrice.toFixed(2)}`);
-                    }
-                    
-                    // Calculate P&L
-                    if (isExited) {
-                        let tradePnl = 0;
-                        
-                        // Regular P&L calculation
-                        if (isLong) { // Long position
-                            tradePnl = (exitPrice - entryPrice) * (10000 / entryPrice);
-                        } else { // Short position
-                            tradePnl = (entryPrice - exitPrice) * (10000 / entryPrice);
-                        }
-                        
-                        // Record the P&L on the exit candle
-                        exitCandle.trade_pnl = tradePnl;
-                        
-                        // Update monthly profit tracking
-                        try {
-                            if (tradePnl > 0) {
-                                // Add to monthly profit
-                                monthlyData.profit += tradePnl;
-                                monthlyData.winCount += 1;
-                                monthlyData.wins += tradePnl;
-                            } else {
-                                // Track losses against monthly limit
-                                if (monthlyProfitLimit && monthlyProfitLimit !== 'off') {
-                                    monthlyData.lossLimit += Math.abs(tradePnl);
-                                }
-                                monthlyData.losses += Math.abs(tradePnl);
-                            }
-                        } catch (error) {
-                            console.error("Error updating monthly tracking:", error);
-                        }
-                        
-                        // Increment trade count for this month
-                        monthlyData.trades += 1;
-                        
-                        // Record the trade
-                        yearTrades.push({
-                            entryDate: firstCandle.datetime,
-                            exitDate: exitCandle.datetime,
-                            position: direction,
-                            entryPrice: entryPrice,
-                            exitPrice: exitPrice,
-                            pnl: tradePnl,
-                            exitReason: exitReason,
-                            stopType: stopType,
-                            monthlyProfit: monthlyData.profit,
-                            monthlyLossLimit: monthlyData.lossLimit
-                        });
-                        
-                        console.log(`Trade completed: P&L=$${tradePnl.toFixed(2)} | Month Profit: $${monthlyData.profit.toFixed(2)} | Month Losses: $${monthlyData.lossLimit.toFixed(2)}`);
-                    }
-                }
-            });
-            
-            console.log(`Total trades executed: ${yearTrades.length}`);
-        } catch (error) {
-            console.error("Error running trading algorithm:", error);
+        // Update UI with results
+        updateResults();
+        
+        console.log(`Simulation complete. Generated ${window.trades.length} trades.`);
+        
+    } catch (error) {
+        console.error('Error running simulation:', error);
+        alert('Error running simulation: ' + error.message);
+    }
+}
+
+// Find additional trades during the day based on breakout pattern
+function findAdditionalTrades(dayCandles, dateStr) {
+    // Sort candles by time
+    const sortedCandles = [...dayCandles].sort((a, b) => a.datetime - b.datetime);
+    
+    // Skip the first 30 minutes (to avoid overlap with first trade of the day)
+    // and to have enough bars for lookback
+    const startIndex = Math.min(window.barsLookback + 2, 6); 
+    
+    for (let i = startIndex; i < sortedCandles.length; i++) {
+        // Get current date
+        const currentDate = new Date(dateStr);
+        const dateOnly = currentDate.toISOString().split('T')[0];
+        
+        // Count existing trades for this day
+        const tradesForDay = window.trades.filter(trade => {
+            const tradeDate = new Date(trade.entryDate);
+            return tradeDate.toISOString().split('T')[0] === dateOnly;
+        }).length;
+        
+        // Skip if we've reached the maximum trades per day
+        if (window.maxTradesPerDay > 0 && tradesForDay >= window.maxTradesPerDay) {
+            break;
         }
         
-        // Calculate trading statistics
-        const tradingResults = calculateTradingResults(data, yearTrades);
+        const currentCandle = sortedCandles[i];
         
-        return { yearTrades, tradingResults };
+        // Get previous candles for breakout check
+        const lookbackCandles = sortedCandles.slice(i - window.barsLookback, i);
+        
+        // Skip if we don't have enough candles for lookback
+        if (lookbackCandles.length < window.barsLookback) {
+            continue;
+        }
+        
+        // Find the lowest low and highest high of the previous N bars
+        const lowestLow = Math.min(...lookbackCandles.map(c => c.low));
+        const highestHigh = Math.max(...lookbackCandles.map(c => c.high));
+        
+        // Check for a short entry (current candle breaks below the lowest low by breakoutPoints)
+        if (currentCandle.low < lowestLow - window.breakoutPoints) {
+            console.log(`Additional SHORT trade at ${currentCandle.datetime.toLocaleTimeString()}: Current low ${currentCandle.low.toFixed(2)} broke below previous ${window.barsLookback} bars low ${lowestLow.toFixed(2)}`);
+            
+            // Current candle breaks below previous lows - SHORT entry
+            processTrade(currentCandle, sortedCandles.slice(i), 'short', sortedCandles[i-1].close, false);
+            
+            // Skip a few candles to avoid immediate reentry
+            i += 3;
+        }
+        // Check for a long entry (current candle breaks above the highest high by breakoutPoints)
+        else if (currentCandle.high > highestHigh + window.breakoutPoints) {
+            console.log(`Additional LONG trade at ${currentCandle.datetime.toLocaleTimeString()}: Current high ${currentCandle.high.toFixed(2)} broke above previous ${window.barsLookback} bars high ${highestHigh.toFixed(2)}`);
+            
+            // Current candle breaks above previous highs - LONG entry
+            processTrade(currentCandle, sortedCandles.slice(i), 'long', sortedCandles[i-1].close, false);
+            
+            // Skip a few candles to avoid immediate reentry
+            i += 3;
+        }
     }
+}
+
+// Process a trade for a day
+function processTrade(entryCandle, dayCandles, position, previousDayClose, isFirstTrade = false) {
+    // Entry price is the close of the market open candle
+    const entryPrice = entryCandle.close;
+    let entryDate = entryCandle.datetime;
     
-    function calculateTradingResults(data, trades) {
-        try {
-            // Initial values
-            const initialValue = 10000;
-            let finalValue = initialValue;
+    // Find exit point in subsequent candles
+    let exitCandle = null;
+    let exitPrice = null;
+    let exitDate = null;
+    let exitReason = '';
+    
+    // Sort candles by time and start checking from after entry candle
+    const tradingCandles = dayCandles.filter(c => c.datetime > entryDate);
+    
+    // Exit logic differs for first trade vs additional trades
+    if (isFirstTrade) {
+        // First trade of the day - uses default or RSI exit strategy
+        // Stop loss level - default exit strategy for first trade
+        const stopPrice = position === 'long' ? entryCandle.low : entryCandle.high;
+        
+        // Profit target - same for all trades
+        const profitTargetPrice = position === 'long' 
+            ? entryPrice + window.profitTarget
+            : entryPrice - window.profitTarget;
             
-            // Add trade P&L to get final value
-            trades.forEach(trade => {
-                finalValue += trade.pnl;
-            });
+        for (let i = 0; i < tradingCandles.length; i++) {
+            const candle = tradingCandles[i];
             
-            // Calculate returns
-            const strategyReturn = ((finalValue / initialValue) - 1) * 100;
+            // RSI-based exit logic
+            if (window.exitStrategy === 'rsi') {
+                // Calculate a simple placeholder RSI value based on price moves
+                const rsiValue = calculateSimpleRSI(tradingCandles.slice(0, i + 1), window.rsiPeriod);
+                
+                // Check RSI conditions
+                if (position === 'long' && rsiValue >= window.rsiOverbought) {
+                    exitPrice = candle.close;
+                    exitDate = candle.datetime;
+                    exitReason = 'RSI Overbought';
+                    exitCandle = candle;
+                    break;
+                } else if (position === 'short' && rsiValue <= window.rsiOversold) {
+                    exitPrice = candle.close;
+                    exitDate = candle.datetime;
+                    exitReason = 'RSI Oversold';
+                    exitCandle = candle;
+                    break;
+                }
+            }
             
-            // Calculate buy & hold return for comparison
-            const firstPrice = data.length > 0 ? data[0].close : 0;
-            const lastPrice = data.length > 0 ? data[data.length - 1].close : 0;
-            const buyHoldReturn = firstPrice > 0 ? ((lastPrice / firstPrice) - 1) * 100 : 0;
+            // Default exit strategy for first trade
+            if (window.exitStrategy === 'default') {
+                if (position === 'long' && candle.low <= stopPrice) {
+                    exitPrice = stopPrice; // Exit at stop level
+                    exitDate = candle.datetime;
+                    exitReason = 'Stop Loss';
+                    exitCandle = candle;
+                    break;
+                } else if (position === 'short' && candle.high >= stopPrice) {
+                    exitPrice = stopPrice; // Exit at stop level
+                    exitDate = candle.datetime;
+                    exitReason = 'Stop Loss';
+                    exitCandle = candle;
+                    break;
+                }
+            }
             
-            // Calculate max drawdown
-            let peak = initialValue;
-            let maxDrawdown = 0;
-            let currentValue = initialValue;
+            // Profit target check (applies to both first and additional trades)
+            if (position === 'long' && candle.high >= profitTargetPrice) {
+                exitPrice = profitTargetPrice; // Exit at profit target
+                exitDate = candle.datetime;
+                exitReason = 'Profit Target';
+                exitCandle = candle;
+                break;
+            } else if (position === 'short' && candle.low <= profitTargetPrice) {
+                exitPrice = profitTargetPrice; // Exit at profit target
+                exitDate = candle.datetime;
+                exitReason = 'Profit Target';
+                exitCandle = candle;
+                break;
+            }
             
-            // Sort trades by exit date
-            const sortedTrades = [...trades].sort((a, b) => a.exitDate - b.exitDate);
+            // If we reach the last candle of the day, exit at close
+            if (i === tradingCandles.length - 1) {
+                exitPrice = candle.close;
+                exitDate = candle.datetime;
+                exitReason = 'Market Close';
+                exitCandle = candle;
+            }
+        }
+    } else {
+        // Additional trades of the day - use the specified exit strategy
+        // Profit target - same for all trades
+        const profitTargetPrice = position === 'long' 
+            ? entryPrice + window.profitTarget
+            : entryPrice - window.profitTarget;
             
-            sortedTrades.forEach(trade => {
-                currentValue += trade.pnl;
-                peak = Math.max(peak, currentValue);
-                const drawdown = peak > 0 ? ((peak - currentValue) / peak) * 100 : 0;
-                maxDrawdown = Math.max(maxDrawdown, drawdown);
-            });
+        for (let i = 0; i < tradingCandles.length; i++) {
+            const candle = tradingCandles[i];
             
-            // Trade statistics
-            const totalTrades = trades.length;
-            const winningTrades = trades.filter(t => t.pnl > 0).length;
-            const winRate = totalTrades > 0 ? (winningTrades / totalTrades) * 100 : 0;
+            // Need at least 2 bars to check the previous bars
+            if (i < 2) continue;
             
-            const totalProfit = trades.filter(t => t.pnl > 0).reduce((sum, t) => sum + t.pnl, 0);
-            const totalLoss = Math.abs(trades.filter(t => t.pnl < 0).reduce((sum, t) => sum + t.pnl, 0));
-            const profitFactor = totalLoss > 0 ? totalProfit / totalLoss : totalProfit > 0 ? Infinity : 0;
+            // Get the previous two bars for the stop loss
+            const prevBar1 = tradingCandles[i-1];
+            const prevBar2 = tradingCandles[i-2];
             
-            // Exit reasons
-            const stopLossExits = trades.filter(t => t.exitReason === 'Stop Loss').length;
-            const profitTargetExits = trades.filter(t => t.exitReason === 'Profit Target').length;
-            const dayEndExits = trades.filter(t => t.exitReason === 'End of Day').length;
+            // Calculate stop loss levels based on the previous two bars
+            const stopLossLevelLong = Math.min(prevBar1.low, prevBar2.low);
+            const stopLossLevelShort = Math.max(prevBar1.high, prevBar2.high);
             
-            return {
-                initialValue,
-                finalValue,
-                strategyReturn,
-                buyHoldReturn,
-                maxDrawdown,
-                totalTrades,
-                winningTrades,
-                winRate,
-                profitFactor,
-                stopLossExits,
-                profitTargetExits,
-                dayEndExits
-            };
-        } catch (error) {
-            console.error("Error calculating trading results:", error);
-            return {
-                initialValue: 10000,
-                finalValue: 10000,
-                strategyReturn: 0,
-                buyHoldReturn: 0,
-                maxDrawdown: 0,
-                totalTrades: 0,
-                winningTrades: 0,
-                winRate: 0,
-                profitFactor: 0,
-                stopLossExits: 0,
-                profitTargetExits: 0,
-                dayEndExits: 0
-            };
+            // Stop loss check for additional trades
+            if (position === 'long' && candle.low <= stopLossLevelLong) {
+                exitPrice = candle.close; // Exit at close of breaking candle
+                exitDate = candle.datetime;
+                exitReason = 'Stop Loss - Previous Bars Low';
+                exitCandle = candle;
+                break;
+            } else if (position === 'short' && candle.high >= stopLossLevelShort) {
+                exitPrice = candle.close; // Exit at close of breaking candle
+                exitDate = candle.datetime;
+                exitReason = 'Stop Loss - Previous Bars High';
+                exitCandle = candle;
+                break;
+            }
+            
+            // Alternate exit strategy (if no stop loss is triggered)
+            // For short: exit when price breaks previous bar's high
+            // For long: exit when price breaks previous bar's low
+            if (position === 'short' && candle.high > prevBar1.high) {
+                exitPrice = candle.close;
+                exitDate = candle.datetime;
+                exitReason = 'Break Previous Bar High';
+                exitCandle = candle;
+                break;
+            } else if (position === 'long' && candle.low < prevBar1.low) {
+                exitPrice = candle.close;
+                exitDate = candle.datetime;
+                exitReason = 'Break Previous Bar Low';
+                exitCandle = candle;
+                break;
+            }
+            
+            // Profit target check
+            if (position === 'long' && candle.high >= profitTargetPrice) {
+                exitPrice = profitTargetPrice; // Exit at profit target
+                exitDate = candle.datetime;
+                exitReason = 'Profit Target';
+                exitCandle = candle;
+                break;
+            } else if (position === 'short' && candle.low <= profitTargetPrice) {
+                exitPrice = profitTargetPrice; // Exit at profit target
+                exitDate = candle.datetime;
+                exitReason = 'Profit Target';
+                exitCandle = candle;
+                break;
+            }
+            
+            // If we reach the last candle of the day, exit at close
+            if (i === tradingCandles.length - 1) {
+                exitPrice = candle.close;
+                exitDate = candle.datetime;
+                exitReason = 'Market Close';
+                exitCandle = candle;
+            }
         }
     }
     
-    function updateCharts(data, trades) {
-        try {
-            if (data.length === 0) {
-                console.error("No data available for charts");
-                return;
-            }
-            
-            // Verify Chart.js is available
-            if (typeof Chart === 'undefined') {
-                console.error("Chart.js library not loaded");
-                return;
-            }
-            
-            // Prepare chart data
-            const dates = data.map(d => d.datetime);
-            const prices = data.map(d => d.close);
-            
-            // Find trade entry and exit points
-            const longEntries = [];
-            const longExits = [];
-            const shortEntries = [];
-            const shortExits = [];
-            
-            trades.forEach(trade => {
-                if (trade.position === 'Long') {
-                    // Find the index in data that matches this trade's entry date
-                    const entryIndex = data.findIndex(d => d.datetime.getTime() === trade.entryDate.getTime());
-                    const exitIndex = data.findIndex(d => d.datetime.getTime() === trade.exitDate.getTime());
-                    
-                    if (entryIndex !== -1) {
-                        longEntries.push({
-                            x: trade.entryDate,
-                            y: trade.entryPrice
-                        });
-                    }
-                    
-                    if (exitIndex !== -1) {
-                        longExits.push({
-                            x: trade.exitDate,
-                            y: trade.exitPrice
-                        });
-                    }
-                } else {
-                    // Find the index in data that matches this trade's entry date
-                    const entryIndex = data.findIndex(d => d.datetime.getTime() === trade.entryDate.getTime());
-                    const exitIndex = data.findIndex(d => d.datetime.getTime() === trade.exitDate.getTime());
-                    
-                    if (entryIndex !== -1) {
-                        shortEntries.push({
-                            x: trade.entryDate,
-                            y: trade.entryPrice
-                        });
-                    }
-                    
-                    if (exitIndex !== -1) {
-                        shortExits.push({
-                            x: trade.exitDate,
-                            y: trade.exitPrice
-                        });
-                    }
-                }
-            });
-            
-            // Calculate performance data for comparison chart
-            const firstPrice = data[0].close;
-            const strategyData = [{ x: data[0].datetime, y: 0 }]; // Start at 0% return
-            
-            let currentValue = 10000; // Initial capital
-            let lastTradeDate = data[0].datetime;
-            
-            // Sort trades by exit date
-            const sortedTrades = [...trades].sort((a, b) => a.exitDate - b.exitDate);
-            
-            sortedTrades.forEach(trade => {
-                // Add point right before this trade's impact
-                strategyData.push({
-                    x: trade.exitDate,
-                    y: ((currentValue / 10000) - 1) * 100
-                });
-                
-                // Add trade's P&L to current value
-                currentValue += trade.pnl;
-                
-                // Add point after this trade's impact
-                strategyData.push({
-                    x: trade.exitDate,
-                    y: ((currentValue / 10000) - 1) * 100
-                });
-                
-                lastTradeDate = trade.exitDate;
-            });
-            
-            // Add final point at the end of the data
-            if (lastTradeDate < data[data.length - 1].datetime) {
-                strategyData.push({
-                    x: data[data.length - 1].datetime,
-                    y: ((currentValue / 10000) - 1) * 100
-                });
-            }
-            
-            // Calculate buy & hold performance
-            const buyHoldData = data.map(d => ({
-                x: d.datetime,
-                y: ((d.close / firstPrice) - 1) * 100
-            }));
-            
-            // Find the chart container elements
-            const priceChartEl = document.getElementById('price-chart');
-            const perfChartEl = document.getElementById('performance-chart');
-            
-            if (!priceChartEl || !perfChartEl) {
-                console.error("Chart canvas elements not found");
-                return;
-            }
-            
-            // Create or update price chart
-            const priceCtx = priceChartEl.getContext('2d');
-            
-            if (priceChart) {
-                priceChart.destroy();
-            }
-            
-            priceChart = new Chart(priceCtx, {
-                type: 'line',
-                data: {
-                    datasets: [
-                        {
-                            label: 'SPY Price',
-                            data: data.map(d => ({ x: d.datetime, y: d.close })),
-                            borderColor: 'black',
-                            borderWidth: 1,
-                            pointRadius: 0,
-                            fill: false
-                        },
-                        {
-                            label: 'Long Entries',
-                            data: longEntries,
-                            backgroundColor: 'green',
-                            borderColor: 'green',
-                            pointRadius: 6,
-                            pointStyle: 'triangle',
-                            showLine: false
-                        },
-                        {
-                            label: 'Short Entries',
-                            data: shortEntries,
-                            backgroundColor: 'red',
-                            borderColor: 'red',
-                            pointRadius: 6,
-                            pointStyle: 'triangle',
-                            rotation: 180,
-                            showLine: false
-                        },
-                        {
-                            label: 'Trade Exits',
-                            data: [...longExits, ...shortExits],
-                            backgroundColor: 'black',
-                            borderColor: 'black',
-                            pointRadius: 5,
-                            pointStyle: 'circle',
-                            showLine: false
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        x: {
-                            type: 'time',
-                            time: {
-                                unit: 'month',
-                                displayFormats: {
-                                    month: 'MMM'
-                                }
-                            },
-                            title: {
-                                display: true,
-                                text: 'Date'
-                            }
-                        },
-                        y: {
-                            title: {
-                                display: true,
-                                text: 'Price ($)'
-                            }
-                        }
-                    },
-                    plugins: {
-                        title: {
-                            display: true,
-                            text: `SPY Price with Entry/Exit Points - ${yearSelect ? yearSelect.value : 'Current Year'} (Range: ${rangeRequirement} pts, PT: ${profitTarget} pts)`,
-                            font: {
-                                size: 16
-                            }
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    if (context.dataset.label === 'SPY Price') {
-                                        return `Price: $${context.parsed.y.toFixed(2)}`;
-                                    } else {
-                                        return `${context.dataset.label}: $${context.parsed.y.toFixed(2)}`;
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    interaction: {
-                        mode: 'nearest',
-                        intersect: false
-                    }
-                }
-            });
-            
-            // Create or update performance comparison chart
-            const perfCtx = perfChartEl.getContext('2d');
-            
-            if (performanceChart) {
-                performanceChart.destroy();
-            }
-            
-            performanceChart = new Chart(perfCtx, {
-                type: 'line',
-                data: {
-                    datasets: [
-                        {
-                            label: 'Strategy',
-                            data: strategyData,
-                            borderColor: 'green',
-                            borderWidth: 2,
-                            pointRadius: 0,
-                            fill: false
-                        },
-                        {
-                            label: 'Buy & Hold',
-                            data: buyHoldData,
-                            borderColor: 'blue',
-                            borderWidth: 2,
-                            pointRadius: 0,
-                            fill: false
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        x: {
-                            type: 'time',
-                            time: {
-                                unit: 'month',
-                                displayFormats: {
-                                    month: 'MMM'
-                                }
-                            },
-                            title: {
-                                display: true,
-                                text: 'Date'
-                            }
-                        },
-                        y: {
-                            title: {
-                                display: true,
-                                text: 'Returns (%)'
-                            },
-                            ticks: {
-                                callback: function(value) {
-                                    return value.toFixed(1) + '%';
-                                }
-                            }
-                        }
-                    },
-                    plugins: {
-                        title: {
-                            display: true,
-                            text: `Performance Comparison - ${yearSelect ? yearSelect.value : 'Current Year'} (Range: ${rangeRequirement} pts, PT: ${profitTarget} pts)`,
-                            font: {
-                                size: 16
-                            }
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    return `${context.dataset.label}: ${context.parsed.y.toFixed(2)}%`;
-                                }
-                            }
-                        }
-                    },
-                    interaction: {
-                        mode: 'index',
-                        intersect: false
-                    }
-                }
-            });
-        } catch (error) {
-            console.error("Error updating charts:", error);
-        }
+    // If we couldn't find an exit (e.g., no more candles after entry), exit at last candle
+    if (!exitCandle && dayCandles.length > 0) {
+        const lastCandle = dayCandles[dayCandles.length - 1];
+        exitPrice = lastCandle.close;
+        exitDate = lastCandle.datetime;
+        exitReason = 'End of Day';
+        exitCandle = lastCandle;
     }
     
-    function updateStatistics(results) {
-        try {
-            // Update DOM elements with statistics
-            updateElementText('annual-return-stat', 
-                `Strategy: ${results.strategyReturn.toFixed(2)}% (B&H: ${results.buyHoldReturn.toFixed(2)}%)`);
-            
-            updateElementText('max-drawdown-stat',
-                `${results.maxDrawdown.toFixed(2)}%`);
-            
-            updateElementText('profit-factor-stat',
-                `${results.profitFactor.toFixed(2)}`);
-            
-            updateElementText('win-rate-stat',
-                `${results.winRate.toFixed(2)}% (${results.winningTrades}/${results.totalTrades})`);
-            
-            updateElementText('total-trades-stat',
-                `${results.totalTrades} (SL:${results.stopLossExits} PT:${results.profitTargetExits} EOD:${results.dayEndExits})`);
-        } catch (error) {
-            console.error("Error updating statistics:", error);
-        }
+    // Calculate P&L
+    let pnl = position === 'long' 
+        ? (exitPrice - entryPrice) * (window.positionSize / entryPrice)
+        : (entryPrice - exitPrice) * (window.positionSize / entryPrice);
+    
+    // Create trade object
+    const trade = {
+        entryDate: entryDate,
+        exitDate: exitDate,
+        entryPrice: entryPrice,
+        exitPrice: exitPrice,
+        position: position,
+        pnl: pnl,
+        exitReason: exitReason,
+        positionSize: window.positionSize,
+        previousClose: previousDayClose,
+        isFirstTrade: isFirstTrade
+    };
+    
+    // Track monthly P&L
+    const month = entryDate.getMonth();
+    const year = entryDate.getFullYear();
+    const monthKey = `${year}-${month+1}`;
+    
+    if (!window.monthlyProfits[monthKey]) {
+        window.monthlyProfits[monthKey] = {
+            year: year,
+            month: month+1,
+            totalPnl: 0,
+            tradeCount: 0,
+            wins: 0,
+            losses: 0
+        };
     }
     
-    // Helper function to update text content safely
-    function updateElementText(elementId, text) {
-        const element = document.getElementById(elementId);
-        if (element) {
-            element.textContent = text;
+    window.monthlyProfits[monthKey].totalPnl += pnl;
+    window.monthlyProfits[monthKey].tradeCount++;
+    if (pnl > 0) window.monthlyProfits[monthKey].wins++;
+    else if (pnl < 0) window.monthlyProfits[monthKey].losses++;
+    
+    // Add monthlyPnl to trade for display
+    trade.monthlyPnl = window.monthlyProfits[monthKey].totalPnl;
+    
+    // Add the trade to our list
+    window.trades.push(trade);
+    
+    console.log(`Trade recorded: ${position} entry at ${entryPrice.toFixed(2)}, exit at ${exitPrice.toFixed(2)}, P&L: $${pnl.toFixed(2)}, Reason: ${exitReason}, First trade: ${isFirstTrade}`);
+}
+
+// Calculate a simple RSI (placeholder)
+function calculateSimpleRSI(candles, period) {
+    if (candles.length < period) return 50; // Not enough data
+    
+    const prices = candles.map(c => c.close);
+    const gains = [];
+    const losses = [];
+    
+    // Calculate price changes
+    for (let i = 1; i < prices.length; i++) {
+        const change = prices[i] - prices[i-1];
+        if (change >= 0) {
+            gains.push(change);
+            losses.push(0);
         } else {
-            console.log(`Element ${elementId} not found`);
+            gains.push(0);
+            losses.push(Math.abs(change));
         }
     }
     
-    function updateTradesTable(trades) {
-        try {
-            // Get table body
-            const tbody = document.getElementById('trades-body');
-            
-            if (!tbody) {
-                console.error("Trades table body element not found");
-                return;
-            }
-            
-            // Clear existing rows
-            tbody.innerHTML = '';
-            
-            // Sort trades by entry date
-            const sortedTrades = [...trades].sort((a, b) => a.entryDate - b.entryDate);
-            
-            // Add a row for each trade
-            sortedTrades.forEach(trade => {
-                const row = document.createElement('tr');
-                
-                // Format dates
-                const entryDate = formatDateTime(trade.entryDate);
-                const exitDate = formatDateTime(trade.exitDate);
-                
-                // Format prices and P&L
-                const entryPrice = trade.entryPrice.toFixed(2);
-                const exitPrice = trade.exitPrice.toFixed(2);
-                const pnl = trade.pnl.toFixed(2);
-                
-                // Add class based on P&L
-                row.classList.add(trade.pnl >= 0 ? 'trade-win' : 'trade-loss');
-                
-                // Create cells
-                // Format monthly profit for display
-                const monthlyProfit = trade.monthlyProfit ? `$${trade.monthlyProfit.toFixed(2)}` : '--';
-                
-                row.innerHTML = `
-                    <td>${entryDate}</td>
-                    <td>${exitDate}</td>
-                    <td>${trade.position}</td>
-                    <td>$${entryPrice}</td>
-                    <td>$${exitPrice}</td>
-                    <td>$${pnl}</td>
-                    <td>${trade.exitReason}</td>
-                    <td>${monthlyProfit}</td>
-                `;
-                
-                tbody.appendChild(row);
+    // Get data for the RSI period
+    const periodGains = gains.slice(-period);
+    const periodLosses = losses.slice(-period);
+    
+    // Average gains and losses
+    const avgGain = periodGains.reduce((sum, val) => sum + val, 0) / period;
+    const avgLoss = periodLosses.reduce((sum, val) => sum + val, 0) / period;
+    
+    // Calculate RSI
+    if (avgLoss === 0) return 100;
+    
+    const rs = avgGain / avgLoss;
+    const rsi = 100 - (100 / (1 + rs));
+    
+    return rsi;
+}
+
+// Update UI with simulation results
+function updateResults() {
+    // Update results tab
+    updateResultsTab();
+    
+    // Update analytics tab
+    updateAnalyticsTab();
+    
+    // Update trades tab
+    updateTradesTab();
+}
+
+// Update the Results tab
+function updateResultsTab() {
+    // Calculate performance metrics
+    const totalTrades = window.trades.length;
+    if (totalTrades === 0) {
+        alert("No trades were generated. Try adjusting parameters.");
+        return;
+    }
+    
+    const grossProfit = window.trades
+        .filter(t => t.pnl > 0)
+        .reduce((sum, t) => sum + t.pnl, 0);
+    
+    const grossLoss = window.trades
+        .filter(t => t.pnl < 0)
+        .reduce((sum, t) => sum + Math.abs(t.pnl), 0);
+    
+    const netProfit = window.trades.reduce((sum, t) => sum + t.pnl, 0);
+    const profitFactor = grossLoss === 0 ? Infinity : grossProfit / grossLoss;
+    
+    const winCount = window.trades.filter(t => t.pnl > 0).length;
+    const lossCount = window.trades.filter(t => t.pnl < 0).length;
+    const winRate = totalTrades === 0 ? 0 : (winCount / totalTrades) * 100;
+    
+    const totalInvestment = window.positionSize * totalTrades;
+    const annualReturn = totalInvestment === 0 ? 0 : (netProfit / totalInvestment) * 100;
+    
+    // Calculate max drawdown
+    let maxDrawdown = 0;
+    let peakEquity = 0;
+    let currentEquity = 0;
+    
+    window.trades.forEach(trade => {
+        currentEquity += trade.pnl;
+        if (currentEquity > peakEquity) {
+            peakEquity = currentEquity;
+        }
+        
+        const drawdown = peakEquity - currentEquity;
+        if (drawdown > maxDrawdown) {
+            maxDrawdown = drawdown;
+        }
+    });
+    
+    const maxDrawdownPercent = totalInvestment === 0 ? 0 : (maxDrawdown / totalInvestment) * 100;
+    
+    // Update stats display
+    document.getElementById('annual-return-stat').textContent = `${annualReturn.toFixed(2)}%`;
+    document.getElementById('max-drawdown-stat').textContent = `$${maxDrawdown.toFixed(2)} (${maxDrawdownPercent.toFixed(2)}%)`;
+    document.getElementById('profit-factor-stat').textContent = profitFactor === Infinity ? 'Infinity' : profitFactor.toFixed(2);
+    document.getElementById('win-rate-stat').textContent = `${winRate.toFixed(2)}% (${winCount}/${totalTrades})`;
+    document.getElementById('total-trades-stat').textContent = totalTrades;
+    document.getElementById('total-investment-stat').textContent = `$${totalInvestment.toLocaleString()}`;
+    
+    // Create price chart
+    createPriceChart();
+    
+    // Create performance chart
+    createPerformanceChart();
+}
+
+// Create price chart with entry/exit points
+function createPriceChart() {
+    const canvas = document.getElementById('price-chart');
+    if (!canvas) return;
+    
+    // Destroy existing chart if it exists
+    if (window.priceChart) {
+        window.priceChart.destroy();
+    }
+    
+    // Get the selected year's data
+    const selectedYear = window.yearSelect ? parseInt(window.yearSelect.value) : window.years[0];
+    const yearData = window.fullData.filter(d => d.datetime.getFullYear() === selectedYear);
+    
+    if (yearData.length === 0) return;
+    
+    // Format data for Chart.js - take fewer samples for better readability
+    const sampledData = [];
+    for (let i = 0; i < yearData.length; i += 1) { // Sample every point for better readability
+        sampledData.push(yearData[i]);
+    }
+    
+    // Format data for Chart.js
+    const chartLabels = sampledData.map(d => d.datetime);
+    const chartData = sampledData.map(d => d.close);
+    
+    // Create entry/exit point datasets
+    const longEntryPoints = [];
+    const shortEntryPoints = [];
+    const exitPoints = []; // Single exit points array
+    
+    // Prepare trade data
+    window.trades.forEach(trade => {
+        // Entry points
+        if (trade.position === 'long') {
+            longEntryPoints.push({
+                x: trade.entryDate,
+                y: trade.entryPrice
             });
-            
-            // If no trades, show a message
-            if (trades.length === 0) {
-                const row = document.createElement('tr');
-                
-                // Count number of columns in the header
-                const headerCols = document.querySelectorAll('#trades-table thead th').length;
-                const colSpan = headerCols || 8; // Default to 8 if we can't determine
-                
-                row.innerHTML = `<td colspan="${colSpan}" style="text-align: center;">No trades for selected period</td>`;
-                tbody.appendChild(row);
-            }
-        } catch (error) {
-            console.error("Error updating trades table:", error);
-        }
-    }
-    
-    // Helper function to format date time
-    function formatDateTime(date) {
-        try {
-            return date.toLocaleString(undefined, {
-                month: 'short',
-                day: 'numeric',
-                hour: 'numeric',
-                minute: 'numeric'
+        } else {
+            shortEntryPoints.push({
+                x: trade.entryDate,
+                y: trade.entryPrice
             });
-        } catch (error) {
-            console.error("Error formatting date:", error, date);
-            return "Invalid Date";
         }
-    }
+        
+        // All exit points in one array
+        exitPoints.push({
+            x: trade.exitDate,
+            y: trade.exitPrice
+        });
+    });
     
-    // Function to show/hide ATR-related controls based on selected exit strategy
-    function updateExitStrategyControls() {
-        try {
-            const exitStrategySelect = document.getElementById('exit-strategy');
-            if (!exitStrategySelect) return;
-            
-            exitStrategy = exitStrategySelect.value;
-            console.log(`Exit strategy changed to: ${exitStrategy}`);
-            
-            // Get all ATR-specific controls
-            const atrControls = document.querySelectorAll('.atr-controls');
-            
-            // Show or hide based on selected strategy
-            if (exitStrategy === 'atr') {
-                atrControls.forEach(element => {
-                    element.style.display = 'block';
-                });
-            } else {
-                atrControls.forEach(element => {
-                    element.style.display = 'none';
-                });
-            }
-        } catch (error) {
-            console.error("Error updating exit strategy controls:", error);
-        }
-    }
-    
-    // Function to update the monthly analytics tab
-    function updateMonthlyAnalytics() {
-        try {
-            const selectedYear = parseInt(yearSelect.value);
-            if (isNaN(selectedYear) || !monthlyProfits[selectedYear]) {
-                console.log("No monthly data available");
-                return;
-            }
-            
-            const monthNames = [
-                'January', 'February', 'March', 'April', 'May', 'June',
-                'July', 'August', 'September', 'October', 'November', 'December'
-            ];
-            
-            // Process monthly data
-            const monthlyData = [];
-            let bestMonth = { month: '', profit: -Infinity };
-            let worstMonth = { month: '', profit: Infinity };
-            let mostActiveMonth = { month: '', trades: 0 };
-            let totalMonthlyReturns = 0;
-            let profitableMonths = 0;
-            
-            // Collect monthly data
-            for (let month = 0; month < 12; month++) {
-                if (monthlyProfits[selectedYear][month]) {
-                    const data = monthlyProfits[selectedYear][month];
-                    const monthName = monthNames[month];
-                    const monthYear = `${monthName} ${selectedYear}`;
-                    
-                    // Calculate win rate
-                    const totalTrades = data.trades || 0;
-                    const winRate = data.winCount ? ((data.winCount / totalTrades) * 100).toFixed(1) : 0;
-                    
-                    // Calculate profit factor
-                    const profitFactor = data.losses && data.losses > 0 ? (data.wins / data.losses).toFixed(2) : 
-                                        data.wins > 0 ? 'Inf' : 0;
-                    
-                    // Push monthly data
-                    monthlyData.push({
-                        month: monthName,
-                        monthYear,
-                        trades: totalTrades,
-                        profit: data.profit || 0,
-                        winRate: winRate,
-                        profitFactor: profitFactor
-                    });
-                    
-                    // Track best and worst months
-                    if (data.profit > bestMonth.profit) {
-                        bestMonth = { month: monthYear, profit: data.profit };
-                    }
-                    if (data.profit < worstMonth.profit && totalTrades > 0) {
-                        worstMonth = { month: monthYear, profit: data.profit };
-                    }
-                    
-                    // Track most active month
-                    if (totalTrades > mostActiveMonth.trades) {
-                        mostActiveMonth = { month: monthYear, trades: totalTrades };
-                    }
-                    
-                    // Track metrics for average calculation
-                    if (totalTrades > 0) {
-                        totalMonthlyReturns += data.profit;
-                        if (data.profit > 0) profitableMonths++;
-                    }
-                } else {
-                    // Add empty data for months with no trades
-                    monthlyData.push({
-                        month: monthNames[month],
-                        monthYear: `${monthNames[month]} ${selectedYear}`,
-                        trades: 0,
-                        profit: 0,
-                        winRate: 0,
-                        profitFactor: 0
-                    });
-                }
-            }
-            
-            // Calculate average monthly return and consistency
-            const activeMonths = monthlyData.filter(m => m.trades > 0).length;
-            const avgMonthlyReturn = activeMonths > 0 ? totalMonthlyReturns / activeMonths : 0;
-            const monthlyConsistency = activeMonths > 0 ? (profitableMonths / activeMonths) * 100 : 0;
-            
-            // Update the monthly analytics stats
-            updateElementText('best-month-stat', bestMonth.profit !== -Infinity ? 
-                `${bestMonth.month}: $${bestMonth.profit.toFixed(2)}` : '--');
-                
-            updateElementText('worst-month-stat', worstMonth.profit !== Infinity ? 
-                `${worstMonth.month}: $${worstMonth.profit.toFixed(2)}` : '--');
-                
-            updateElementText('avg-monthly-return-stat', activeMonths > 0 ? 
-                `$${avgMonthlyReturn.toFixed(2)}` : '--');
-                
-            updateElementText('monthly-consistency-stat', activeMonths > 0 ? 
-                `${monthlyConsistency.toFixed(1)}% of months profitable` : '--');
-                
-            updateElementText('most-active-month-stat', mostActiveMonth.trades > 0 ? 
-                `${mostActiveMonth.month}: ${mostActiveMonth.trades} trades` : '--');
-            
-            // Update monthly breakdown table
-            updateMonthlyTable(monthlyData);
-            
-            // Update monthly performance chart
-            updateMonthlyChart(monthlyData);
-            
-        } catch (error) {
-            console.error("Error updating monthly analytics:", error);
-        }
-    }
-    
-    // Update the monthly breakdown table
-    function updateMonthlyTable(monthlyData) {
-        try {
-            const tbody = document.getElementById('monthly-body');
-            if (!tbody) return;
-            
-            // Clear existing rows
-            tbody.innerHTML = '';
-            
-            // Add a row for each month
-            monthlyData.forEach(data => {
-                const row = document.createElement('tr');
-                
-                // Format profit with colors
-                const profitClass = data.profit > 0 ? 'positive-pnl' : 
-                                   data.profit < 0 ? 'negative-pnl' : '';
-                
-                row.innerHTML = `
-                    <td>${data.month}</td>
-                    <td>${data.trades}</td>
-                    <td>${data.winRate}%</td>
-                    <td class="${profitClass}">$${data.profit.toFixed(2)}</td>
-                    <td>${data.profitFactor}</td>
-                `;
-                
-                tbody.appendChild(row);
-            });
-        } catch (error) {
-            console.error("Error updating monthly table:", error);
-        }
-    }
-    
-    // Update the monthly performance chart
-    function updateMonthlyChart(monthlyData) {
-        try {
-            const chartCanvas = document.getElementById('monthly-performance-chart');
-            if (!chartCanvas) return;
-            
-            // Prepare chart data
-            const months = monthlyData.map(d => d.month);
-            const profits = monthlyData.map(d => d.profit);
-            const trades = monthlyData.map(d => d.trades);
-            
-            // Define chart colors
-            const profitColors = profits.map(p => p >= 0 ? 'rgba(39, 174, 96, 0.7)' : 'rgba(231, 76, 60, 0.7)');
-            
-            // Check if chart instance exists and destroy if it does
-            if (window.monthlyChart instanceof Chart) {
-                window.monthlyChart.destroy();
-            }
-            
-            // Create new chart instance
-            window.monthlyChart = new Chart(chartCanvas, {
-                type: 'bar',
-                data: {
-                    labels: months,
-                    datasets: [
-                        {
-                            label: 'Monthly P&L',
-                            data: profits,
-                            backgroundColor: profitColors,
-                            borderColor: profitColors.map(c => c.replace('0.7', '1')),
-                            borderWidth: 1,
-                            yAxisID: 'y'
-                        },
-                        {
-                            label: 'Trades',
-                            data: trades,
-                            type: 'line',
-                            borderColor: 'rgba(52, 152, 219, 1)',
-                            backgroundColor: 'rgba(52, 152, 219, 0.2)',
-                            borderWidth: 2,
-                            pointRadius: 4,
-                            fill: false,
-                            yAxisID: 'y1'
-                        }
-                    ]
+    // Create the chart with improved readability
+    window.priceChart = new Chart(canvas, {
+        type: 'line',
+        data: {
+            labels: chartLabels,
+            datasets: [
+                {
+                    label: 'SPY Price',
+                    data: chartData,
+                    borderColor: 'rgba(25, 25, 25, 1)',
+                    backgroundColor: 'rgba(240, 240, 240, 0.5)',
+                    pointRadius: 0,
+                    borderWidth: 2,
+                    fill: true
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        title: {
-                            display: true,
-                            text: `Monthly Performance Analysis - ${yearSelect ? yearSelect.value : 'Current Year'}`,
-                            font: {
-                                size: 16
-                            }
+                {
+                    label: 'Long Entry',
+                    data: longEntryPoints,
+                    borderColor: 'rgba(0, 128, 0, 1)',
+                    backgroundColor: 'rgba(0, 128, 0, 1)',
+                    pointRadius: 10, 
+                    pointStyle: 'triangle',
+                    pointRotation: 0,
+                    showLine: false
+                },
+                {
+                    label: 'Short Entry',
+                    data: shortEntryPoints,
+                    borderColor: 'rgba(255, 0, 0, 1)',
+                    backgroundColor: 'rgba(255, 0, 0, 1)',
+                    pointRadius: 10,
+                    pointStyle: 'triangle',
+                    pointRotation: 180,
+                    showLine: false
+                },
+                {
+                    label: 'Exit Position',
+                    data: exitPoints,
+                    borderColor: 'rgba(0, 0, 0, 1)',
+                    backgroundColor: 'rgba(0, 0, 0, 1)',
+                    pointRadius: 10,
+                    pointStyle: 'rect',
+                    showLine: false
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    type: 'time',
+                    time: {
+                        unit: 'day',
+                        displayFormats: {
+                            day: 'MMM d'
+                        }
+                    },
+                    title: {
+                        display: true,
+                        text: 'Date',
+                        font: {
+                            size: 14,
+                            weight: 'bold'
+                        }
+                    },
+                    ticks: {
+                        font: {
+                            size: 12
+                        }
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Price ($)',
+                        font: {
+                            size: 14,
+                            weight: 'bold'
+                        }
+                    },
+                    ticks: {
+                        font: {
+                            size: 12
+                        }
+                    }
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        title: function(tooltipItems) {
+                            return formatDateTime(new Date(tooltipItems[0].parsed.x));
                         },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    const label = context.dataset.label || '';
-                                    if (label === 'Monthly P&L') {
-                                        return `P&L: $${context.parsed.y.toFixed(2)}`;
-                                    } else {
-                                        return `Trades: ${context.parsed.y}`;
-                                    }
-                                }
+                        label: function(context) {
+                            const datasetLabel = context.dataset.label;
+                            const value = context.parsed.y;
+                            
+                            if (datasetLabel === 'SPY Price') {
+                                return `Price: $${value.toFixed(2)}`;
+                            } else {
+                                return `${datasetLabel}: $${value.toFixed(2)}`;
                             }
                         }
                     },
-                    scales: {
-                        x: {
-                            title: {
-                                display: true,
-                                text: 'Month'
-                            }
+                    titleFont: {
+                        size: 14,
+                        weight: 'bold'
+                    },
+                    bodyFont: {
+                        size: 13
+                    }
+                },
+                title: {
+                    display: true,
+                    text: `SPY Price Chart - ${selectedYear}`,
+                    font: {
+                        size: 16,
+                        weight: 'bold'
+                    }
+                },
+                legend: {
+                    position: 'top',
+                    labels: {
+                        font: {
+                            size: 12
                         },
-                        y: {
-                            type: 'linear',
-                            display: true,
-                            position: 'left',
-                            title: {
-                                display: true,
-                                text: 'P&L ($)'
-                            },
-                            grid: {
-                                drawOnChartArea: false
-                            }
-                        },
-                        y1: {
-                            type: 'linear',
-                            display: true,
-                            position: 'right',
-                            title: {
-                                display: true,
-                                text: 'Number of Trades'
-                            },
-                            min: 0,
-                            grid: {
-                                drawOnChartArea: false
+                        padding: 15
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Create performance chart (removed as requested)
+function createPerformanceChart() {
+    // Function is now empty as we've removed the daily trading performance chart
+    return;
+}
+
+// Update the Analytics tab
+function updateAnalyticsTab() {
+    // Calculate metrics
+    const totalTrades = window.trades.length;
+    if (totalTrades === 0) return;
+    
+    const netProfit = window.trades.reduce((sum, t) => sum + t.pnl, 0);
+    const winCount = window.trades.filter(t => t.pnl > 0).length;
+    const lossCount = window.trades.filter(t => t.pnl < 0).length;
+    const totalInvestment = window.positionSize * totalTrades;
+    
+    // Update summary stats
+    document.getElementById('analytics-investment-stat').textContent = `$${totalInvestment.toLocaleString()}`;
+    document.getElementById('analytics-wins-stat').textContent = winCount;
+    document.getElementById('analytics-losses-stat').textContent = lossCount;
+    document.getElementById('analytics-net-profit-stat').textContent = `$${netProfit.toFixed(2)}`;
+    
+    // Monthly breakdown
+    const monthlyData = Object.values(window.monthlyProfits).sort((a, b) => {
+        if (a.year !== b.year) return a.year - b.year;
+        return a.month - b.month;
+    });
+    
+    // Calculate monthly metrics
+    if (monthlyData.length > 0) {
+        // Best/worst months
+        const bestMonth = [...monthlyData].sort((a, b) => b.totalPnl - a.totalPnl)[0];
+        const worstMonth = [...monthlyData].sort((a, b) => a.totalPnl - b.totalPnl)[0];
+        const avgMonthlyReturn = monthlyData.reduce((sum, m) => sum + m.totalPnl, 0) / monthlyData.length;
+        const profitableMonths = monthlyData.filter(m => m.totalPnl > 0).length;
+        const monthlyConsistency = `${profitableMonths}/${monthlyData.length} (${((profitableMonths/monthlyData.length)*100).toFixed(2)}%)`;
+        
+        // Most active month
+        const mostActiveMonth = [...monthlyData].sort((a, b) => b.tradeCount - a.tradeCount)[0];
+        
+        // Update monthly stats
+        document.getElementById('best-month-stat').textContent = `${getMonthName(bestMonth.month)} ${bestMonth.year}: $${bestMonth.totalPnl.toFixed(2)}`;
+        document.getElementById('worst-month-stat').textContent = `${getMonthName(worstMonth.month)} ${worstMonth.year}: $${worstMonth.totalPnl.toFixed(2)}`;
+        document.getElementById('avg-monthly-return-stat').textContent = `$${avgMonthlyReturn.toFixed(2)}`;
+        document.getElementById('monthly-consistency-stat').textContent = monthlyConsistency;
+        document.getElementById('most-active-month-stat').textContent = `${getMonthName(mostActiveMonth.month)} ${mostActiveMonth.year}: ${mostActiveMonth.tradeCount} trades`;
+        
+        // Create monthly performance chart
+        createMonthlyPerformanceChart(monthlyData);
+        
+        // Populate monthly table
+        const monthlyBody = document.getElementById('monthly-body');
+        monthlyBody.innerHTML = '';
+        
+        monthlyData.forEach(monthData => {
+            const row = document.createElement('tr');
+            
+            // Calculate win rate
+            const winRate = monthData.tradeCount === 0 ? 0 : 
+                (monthData.wins / monthData.tradeCount) * 100;
+            
+            // Calculate ROI
+            const monthlyInvestment = window.positionSize * monthData.tradeCount;
+            const roi = monthlyInvestment === 0 ? 0 : 
+                (monthData.totalPnl / monthlyInvestment) * 100;
+            
+            // Month column
+            const monthCell = document.createElement('td');
+            monthCell.textContent = `${getMonthName(monthData.month)} ${monthData.year}`;
+            row.appendChild(monthCell);
+            
+            // Trades column
+            const tradesCell = document.createElement('td');
+            tradesCell.textContent = monthData.tradeCount;
+            row.appendChild(tradesCell);
+            
+            // Win Rate column
+            const winRateCell = document.createElement('td');
+            winRateCell.textContent = `${winRate.toFixed(2)}% (${monthData.wins}/${monthData.tradeCount})`;
+            row.appendChild(winRateCell);
+            
+            // Net Profit column
+            const netProfitCell = document.createElement('td');
+            netProfitCell.textContent = `$${monthData.totalPnl.toFixed(2)}`;
+            netProfitCell.classList.add(monthData.totalPnl >= 0 ? 'positive-pnl' : 'negative-pnl');
+            row.appendChild(netProfitCell);
+            
+            // ROI column
+            const roiCell = document.createElement('td');
+            roiCell.textContent = `${roi.toFixed(2)}%`;
+            roiCell.classList.add(roi >= 0 ? 'positive-pnl' : 'negative-pnl');
+            row.appendChild(roiCell);
+            
+            monthlyBody.appendChild(row);
+        });
+    }
+}
+
+// Create monthly performance chart
+function createMonthlyPerformanceChart(monthlyData) {
+    const canvas = document.getElementById('monthly-performance-chart');
+    if (!canvas) return;
+    
+    // Destroy existing chart if it exists
+    if (window.monthlyPerformanceChart) {
+        window.monthlyPerformanceChart.destroy();
+    }
+    
+    if (monthlyData.length === 0) return;
+    
+    // Format data for Chart.js
+    const labels = monthlyData.map(m => `${getMonthName(m.month)} ${m.year}`);
+    const pnlData = monthlyData.map(m => m.totalPnl);
+    const tradeCountData = monthlyData.map(m => m.tradeCount);
+    
+    // Create background colors based on profit/loss
+    const backgroundColors = pnlData.map(pnl => 
+        pnl >= 0 ? 'rgba(75, 192, 192, 0.7)' : 'rgba(255, 99, 132, 0.7)');
+    
+    // Create the chart
+    window.monthlyPerformanceChart = new Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: 'Monthly P&L',
+                    data: pnlData,
+                    backgroundColor: backgroundColors,
+                    borderColor: backgroundColors.map(color => color.replace('0.7', '1')),
+                    borderWidth: 1,
+                    yAxisID: 'y'
+                },
+                {
+                    label: 'Trade Count',
+                    data: tradeCountData,
+                    type: 'line',
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                    borderWidth: 2,
+                    yAxisID: 'y1'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Month'
+                    }
+                },
+                y: {
+                    position: 'left',
+                    title: {
+                        display: true,
+                        text: 'P&L ($)'
+                    }
+                },
+                y1: {
+                    position: 'right',
+                    grid: {
+                        drawOnChartArea: false
+                    },
+                    title: {
+                        display: true,
+                        text: 'Trade Count'
+                    },
+                    min: 0
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const datasetLabel = context.dataset.label;
+                            const value = context.parsed.y;
+                            
+                            if (datasetLabel === 'Monthly P&L') {
+                                return `${datasetLabel}: $${value.toFixed(2)}`;
+                            } else {
+                                return `${datasetLabel}: ${value}`;
                             }
                         }
                     }
+                },
+                title: {
+                    display: true,
+                    text: 'Monthly Performance'
                 }
-            });
-        } catch (error) {
-            console.error("Error updating monthly chart:", error);
+            }
         }
+    });
+}
+
+// Update the Trades tab
+function updateTradesTab() {
+    const tradesBody = document.getElementById('trades-body');
+    if (!tradesBody) return;
+    
+    tradesBody.innerHTML = '';
+    
+    // Sort trades by entry date
+    const sortedTrades = [...window.trades].sort((a, b) => a.entryDate - b.entryDate);
+    
+    sortedTrades.forEach(trade => {
+        const row = document.createElement('tr');
+        
+        // Format dates in Eastern Time
+        const entryDate = formatDateTime(trade.entryDate);
+        const exitDate = formatDateTime(trade.exitDate);
+        
+        // Entry Date column
+        const entryDateCell = document.createElement('td');
+        entryDateCell.textContent = entryDate;
+        // Highlight if it's a first trade of the day (meaning 9:30 candle trade)
+        if (trade.isFirstTrade) {
+            entryDateCell.classList.add('first-trade');
+        }
+        row.appendChild(entryDateCell);
+        
+        // Exit Date column
+        const exitDateCell = document.createElement('td');
+        exitDateCell.textContent = exitDate;
+        row.appendChild(exitDateCell);
+        
+        // Position column
+        const positionCell = document.createElement('td');
+        positionCell.textContent = trade.position.charAt(0).toUpperCase() + trade.position.slice(1);
+        row.appendChild(positionCell);
+        
+        // Entry Price column
+        const entryPriceCell = document.createElement('td');
+        entryPriceCell.textContent = trade.entryPrice.toFixed(2);
+        row.appendChild(entryPriceCell);
+        
+        // Exit Price column
+        const exitPriceCell = document.createElement('td');
+        exitPriceCell.textContent = trade.exitPrice.toFixed(2);
+        row.appendChild(exitPriceCell);
+        
+        // P&L column
+        const pnlCell = document.createElement('td');
+        pnlCell.textContent = `$${trade.pnl.toFixed(2)}`;
+        pnlCell.classList.add(trade.pnl >= 0 ? 'trade-win' : 'trade-loss');
+        row.appendChild(pnlCell);
+        
+        // Exit Reason column
+        const exitReasonCell = document.createElement('td');
+        exitReasonCell.textContent = trade.exitReason;
+        row.appendChild(exitReasonCell);
+        
+        // Monthly P&L column
+        const monthlyPnlCell = document.createElement('td');
+        monthlyPnlCell.textContent = `$${trade.monthlyPnl.toFixed(2)}`;
+        monthlyPnlCell.classList.add(trade.monthlyPnl >= 0 ? 'trade-win' : 'trade-loss');
+        row.appendChild(monthlyPnlCell);
+        
+        tradesBody.appendChild(row);
+    });
+}
+
+// Helper function to format date time
+function formatDateTime(date) {
+    try {
+        // Convert to Eastern Time with 24-hour format
+        const options = {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false // Use 24-hour format (military time)
+        };
+        return date.toLocaleString('en-US', options) + ' ET';
+    } catch (error) {
+        console.error("Error formatting date:", error, date);
+        return "Invalid Date";
     }
-});
+}
+
+// Helper function to get month name
+function getMonthName(month) {
+    const monthNames = [
+        'January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    return monthNames[month - 1]; // Adjust for 0-indexed array
+}
