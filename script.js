@@ -1,3 +1,4 @@
+// deno-lint-ignore-file no-window
 // SPY Trading Simulation
 
 // VERSION INFO
