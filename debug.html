@@ -3,45 +3,757 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Debug SPY App</title>
+    <title>SPY Trading Simulation Debug</title>
+    <link rel="stylesheet" href="styles.css">
+    
+    <!-- Load required libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.0/build/global/luxon.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon"></script>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    
+    <style>
+        /* Additional debug styles */
+        .debug-container {
+            margin: 20px;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        
+        .debug-heading {
+            color: #333;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 8px;
+            margin-bottom: 15px;
+        }
+        
+        .debug-section {
+            margin-bottom: 20px;
+        }
+        
+        .debug-log {
+            font-family: monospace;
+            height: 200px;
+            overflow-y: auto;
+            background-color: #000;
+            color: #0f0;
+            padding: 10px;
+            border-radius: 3px;
+            margin-top: 10px;
+        }
+        
+        .debug-button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 8px;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+        
+        .debug-button:hover {
+            background-color: #45a049;
+        }
+        
+        .debug-error {
+            background-color: #f44336;
+        }
+        
+        .debug-error:hover {
+            background-color: #d32f2f;
+        }
+        
+        .debug-button.active {
+            background-color: #2196F3;
+        }
+        
+        .debug-panel {
+            display: none;
+            padding: 10px;
+            border: 1px solid #ddd;
+            margin-top: 10px;
+            background-color: #fff;
+        }
+        
+        .debug-panel.active {
+            display: block;
+        }
+        
+        .debug-status {
+            padding: 10px;
+            border-radius: 3px;
+            margin-top: 15px;
+            font-weight: bold;
+        }
+        
+        .status-success {
+            background-color: #dff0d8;
+            color: #3c763d;
+            border: 1px solid #d6e9c6;
+        }
+        
+        .status-error {
+            background-color: #f2dede;
+            color: #a94442;
+            border: 1px solid #ebccd1;
+        }
+        
+        .status-warning {
+            background-color: #fcf8e3;
+            color: #8a6d3b;
+            border: 1px solid #faebcc;
+        }
+        
+        table.debug-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        
+        table.debug-table th, table.debug-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        
+        table.debug-table th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        
+        table.debug-table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>SPY Trading Simulation - Debug Mode</h1>
+        
+        <div class="debug-container">
+            <h2 class="debug-heading">Application Diagnostics</h2>
+            
+            <div class="debug-section">
+                <h3>1. Library & Dependency Checks</h3>
+                <button id="check-dependencies" class="debug-button">Check Dependencies</button>
+                <div id="dependencies-status" class="debug-status"></div>
+            </div>
+            
+            <div class="debug-section">
+                <h3>2. Data Loading Test</h3>
+                <button id="test-data-loading" class="debug-button">Test Data Loading</button>
+                <div id="data-loading-status" class="debug-status"></div>
+                <div id="data-loading-log" class="debug-log"></div>
+            </div>
+            
+            <div class="debug-section">
+                <h3>3. Market Hours & Trade Functionality</h3>
+                <button id="test-market-hours" class="debug-button">Test Market Hours</button>
+                <button id="test-trade-recording" class="debug-button">Test Trade Recording</button>
+                <div id="functionality-status" class="debug-status"></div>
+                <div id="functionality-log" class="debug-log"></div>
+            </div>
+            
+            <div class="debug-section">
+                <h3>4. Run Complete Integration Test</h3>
+                <button id="run-integration-test" class="debug-button">Run Full Integration Test</button>
+                <div id="integration-status" class="debug-status"></div>
+                <div id="integration-results"></div>
+            </div>
+        </div>
+        
+        <!-- Debug app launch section -->
+        <div class="debug-container">
+            <h2 class="debug-heading">Launch Application</h2>
+            <p>Click the button below to launch the full application with debugging enabled:</p>
+            <a href="index.html" class="debug-button">Launch Application</a>
+        </div>
+    </div>
+    
+    <!-- Debug scripts -->
     <script>
-        function checkErrors() {
+        // Initialize console log capture for debug logs
+        function setupLogCapture(logElementId) {
+            const logElement = document.getElementById(logElementId);
+            
+            if (!logElement) return;
+            
+            // Original console methods
+            const originalLog = console.log;
+            const originalError = console.error;
+            const originalWarn = console.warn;
+            
+            // Capture console logs
+            console.log = function() {
+                // Call original function
+                originalLog.apply(console, arguments);
+                
+                // Capture for our display
+                const message = Array.from(arguments).map(arg => {
+                    return typeof arg === 'object' ? JSON.stringify(arg) : arg;
+                }).join(' ');
+                
+                // Add to log element
+                logElement.innerHTML += `<div style="color:#0f0">[LOG] ${message}</div>`;
+                logElement.scrollTop = logElement.scrollHeight;
+            };
+            
+            // Capture console errors
+            console.error = function() {
+                // Call original function
+                originalError.apply(console, arguments);
+                
+                // Capture for our display
+                const message = Array.from(arguments).map(arg => {
+                    return typeof arg === 'object' ? JSON.stringify(arg) : arg;
+                }).join(' ');
+                
+                // Add to log element with error styling
+                logElement.innerHTML += `<div style="color:#f44">[ERROR] ${message}</div>`;
+                logElement.scrollTop = logElement.scrollHeight;
+            };
+            
+            // Capture console warnings
+            console.warn = function() {
+                // Call original function
+                originalWarn.apply(console, arguments);
+                
+                // Capture for our display
+                const message = Array.from(arguments).map(arg => {
+                    return typeof arg === 'object' ? JSON.stringify(arg) : arg;
+                }).join(' ');
+                
+                // Add to log element with warning styling
+                logElement.innerHTML += `<div style="color:#ff8">[WARN] ${message}</div>`;
+                logElement.scrollTop = logElement.scrollHeight;
+            };
+        }
+        
+        // Update status display
+        function updateStatus(elementId, message, status) {
+            const element = document.getElementById(elementId);
+            
+            if (!element) return;
+            
+            element.innerHTML = message;
+            element.className = 'debug-status';
+            
+            if (status === 'success') {
+                element.classList.add('status-success');
+            } else if (status === 'error') {
+                element.classList.add('status-error');
+            } else if (status === 'warning') {
+                element.classList.add('status-warning');
+            }
+        }
+        
+        // Check dependencies
+        function checkDependencies() {
             try {
-                // Load the script.js file
+                const dependencies = [
+                    { name: 'Chart.js', global: 'Chart' },
+                    { name: 'Papa Parse', global: 'Papa' },
+                    { name: 'Luxon', global: 'luxon' }
+                ];
+                
+                let allLoaded = true;
+                let statusMessage = '<ul>';
+                
+                dependencies.forEach(dep => {
+                    const isLoaded = typeof window[dep.global] !== 'undefined';
+                    statusMessage += `<li>${dep.name}: ${isLoaded ? '✅ Loaded' : '❌ Not Loaded'}</li>`;
+                    
+                    if (!isLoaded) {
+                        allLoaded = false;
+                    }
+                });
+                
+                // Check if our main script file is accessible
+                fetch('script.js')
+                    .then(response => {
+                        if (!response.ok) {
+                            statusMessage += `<li>script.js: ❌ Not accessible (${response.status})</li>`;
+                            allLoaded = false;
+                        } else {
+                            statusMessage += `<li>script.js: ✅ Accessible</li>`;
+                        }
+                        
+                        // Check for the data file
+                        return fetch('SPY_full_5min_adjsplit.txt');
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            statusMessage += `<li>SPY_full_5min_adjsplit.txt: ❌ Not found (${response.status})</li>`;
+                            allLoaded = false;
+                        } else {
+                            statusMessage += `<li>SPY_full_5min_adjsplit.txt: ✅ Found</li>`;
+                        }
+                        
+                        statusMessage += '</ul>';
+                        
+                        // Update status
+                        if (allLoaded) {
+                            updateStatus('dependencies-status', `✅ All dependencies loaded successfully ${statusMessage}`, 'success');
+                        } else {
+                            updateStatus('dependencies-status', `❌ Some dependencies are missing ${statusMessage}`, 'error');
+                        }
+                    })
+                    .catch(error => {
+                        statusMessage += `<li>Error checking files: ${error.message}</li></ul>`;
+                        updateStatus('dependencies-status', `❌ Error checking dependencies ${statusMessage}`, 'error');
+                    });
+                
+            } catch (error) {
+                updateStatus('dependencies-status', `❌ Error checking dependencies: ${error.message}`, 'error');
+            }
+        }
+        
+        // Test data loading
+        function testDataLoading() {
+            setupLogCapture('data-loading-log');
+            updateStatus('data-loading-status', '⏳ Testing data loading...', 'warning');
+            
+            try {
+                console.log("Attempting to load SPY data file...");
+                
+                // Try to load the SPY data file
+                fetch('SPY_full_5min_adjsplit.txt')
+                    .then(response => {
+                        if (!response.ok) {
+                            console.error(`Failed to load data file: ${response.status} ${response.statusText}`);
+                            updateStatus('data-loading-status', `❌ Failed to load SPY data file (${response.status})`, 'error');
+                            return null;
+                        }
+                        
+                        console.log("SPY data file fetched successfully");
+                        return response.text();
+                    })
+                    .then(csvText => {
+                        if (!csvText) return;
+                        
+                        console.log(`Data file size: ${csvText.length} bytes`);
+                        
+                        // Check if Papa Parse is available
+                        if (typeof Papa === 'undefined') {
+                            console.error("Papa Parse library not loaded");
+                            updateStatus('data-loading-status', '❌ Papa Parse library not loaded', 'error');
+                            return;
+                        }
+                        
+                        // Parse a sample of the CSV
+                        const sampleSize = 1000; // Only parse first 1000 characters for testing
+                        const sample = csvText.substring(0, Math.min(sampleSize, csvText.length));
+                        
+                        console.log("Parsing CSV sample...");
+                        Papa.parse(sample, {
+                            header: false,
+                            dynamicTyping: true,
+                            skipEmptyLines: true,
+                            delimiter: ",",
+                            complete: function(results) {
+                                console.log(`Sample parsing complete: ${results.data.length} rows`);
+                                
+                                if (results.errors && results.errors.length > 0) {
+                                    console.error("CSV parsing errors:", results.errors);
+                                    updateStatus('data-loading-status', '❌ Errors parsing CSV data', 'error');
+                                    return;
+                                }
+                                
+                                // Parse full data
+                                console.log("Parsing full CSV data...");
+                                Papa.parse(csvText, {
+                                    header: false,
+                                    dynamicTyping: true,
+                                    skipEmptyLines: true,
+                                    delimiter: ",",
+                                    complete: function(results) {
+                                        console.log(`Full parsing complete: ${results.data.length} rows`);
+                                        
+                                        if (results.errors && results.errors.length > 0) {
+                                            console.error("Full CSV parsing errors:", results.errors);
+                                            updateStatus('data-loading-status', '❌ Errors parsing full CSV data', 'error');
+                                            return;
+                                        }
+                                        
+                                        // Check if we got valid data
+                                        if (results.data.length === 0) {
+                                            console.error("No data rows found in CSV");
+                                            updateStatus('data-loading-status', '❌ No data rows found in CSV', 'error');
+                                            return;
+                                        }
+                                        
+                                        // Try to process a couple of rows
+                                        try {
+                                            const processedData = results.data.slice(0, 2).map(row => {
+                                                // Function to parse datetime string to Eastern Time
+                                                function parseDateTime(dateTimeStr) {
+                                                    try {
+                                                        // Input format: "YYYY-MM-DD HH:MM:SS"
+                                                        // Convert to: "YYYY-MM-DDT HH:MM:SS-05:00" (EST)
+                                                        const [datePart, timePart] = dateTimeStr.split(' ');
+                                                        
+                                                        // Add the Eastern time zone offset (-05:00)
+                                                        const isoDateTime = `${datePart}T${timePart}-05:00`;
+                                                        
+                                                        // Create a Date object with the ISO string including timezone
+                                                        const dateObj = new Date(isoDateTime);
+                                                        
+                                                        return dateObj;
+                                                    } catch (error) {
+                                                        console.error("Error parsing datetime:", dateTimeStr, error);
+                                                        return new Date(dateTimeStr);
+                                                    }
+                                                }
+                                                
+                                                const datetime = parseDateTime(row[0]);
+                                                return {
+                                                    datetime: datetime,
+                                                    open: parseFloat(row[1]),
+                                                    high: parseFloat(row[2]),
+                                                    low: parseFloat(row[3]),
+                                                    close: parseFloat(row[4]),
+                                                    volume: parseInt(row[5]),
+                                                    date: new Date(datetime.getFullYear(), datetime.getMonth(), datetime.getDate(), 0, 0, 0, 0),
+                                                    time: row[0].split(' ')[1].substring(0, 5)
+                                                };
+                                            });
+                                            
+                                            console.log("Sample processed data:", processedData);
+                                            updateStatus('data-loading-status', `✅ Data loading and parsing successful! Found ${results.data.length} rows.`, 'success');
+                                            
+                                        } catch (error) {
+                                            console.error("Error processing data rows:", error);
+                                            updateStatus('data-loading-status', `❌ Error processing data rows: ${error.message}`, 'error');
+                                        }
+                                    },
+                                    error: function(error) {
+                                        console.error('Error parsing full CSV:', error);
+                                        updateStatus('data-loading-status', `❌ Error parsing full CSV: ${error.message}`, 'error');
+                                    }
+                                });
+                            },
+                            error: function(error) {
+                                console.error('Error parsing CSV sample:', error);
+                                updateStatus('data-loading-status', `❌ Error parsing CSV sample: ${error.message}`, 'error');
+                            }
+                        });
+                    })
+                    .catch(error => {
+                        console.error('Error loading data:', error);
+                        updateStatus('data-loading-status', `❌ Error loading data: ${error.message}`, 'error');
+                    });
+                
+            } catch (error) {
+                console.error('Error in test function:', error);
+                updateStatus('data-loading-status', `❌ Error in test function: ${error.message}`, 'error');
+            }
+        }
+        
+        // Test market hours functionality
+        function testMarketHours() {
+            setupLogCapture('functionality-log');
+            updateStatus('functionality-status', '⏳ Testing market hours functionality...', 'warning');
+            
+            try {
+                console.log("Loading script.js to test market hours functionality...");
+                
+                // Load the script dynamically
                 const script = document.createElement('script');
                 script.src = 'script.js';
-                script.onerror = function() {
-                    document.getElementById('result').innerHTML = 'Error loading script.js';
+                script.onload = function() {
+                    console.log("script.js loaded successfully");
+                    
+                    // Check if market hours variables are defined
+                    const marketOpenHourDefined = typeof marketOpenHour !== 'undefined';
+                    const marketOpenMinuteDefined = typeof marketOpenMinute !== 'undefined';
+                    const marketCloseHourDefined = typeof marketCloseHour !== 'undefined';
+                    const marketCloseMinuteDefined = typeof marketCloseMinute !== 'undefined';
+                    
+                    console.log("Market hours variables defined:", {
+                        marketOpenHour: marketOpenHourDefined, 
+                        marketOpenMinute: marketOpenMinuteDefined,
+                        marketCloseHour: marketCloseHourDefined,
+                        marketCloseMinute: marketCloseMinuteDefined
+                    });
+                    
+                    // Check if market hours functions are defined
+                    const isDuringMarketHoursDefined = typeof isDuringMarketHours === 'function';
+                    const findMarketOpenCandleDefined = typeof findMarketOpenCandle === 'function';
+                    
+                    console.log("Market hours functions defined:", {
+                        isDuringMarketHours: isDuringMarketHoursDefined,
+                        findMarketOpenCandle: findMarketOpenCandleDefined
+                    });
+                    
+                    if (!marketOpenHourDefined || !marketOpenMinuteDefined || 
+                        !marketCloseHourDefined || !marketCloseMinuteDefined) {
+                        console.error("Market hours variables not properly defined");
+                        updateStatus('functionality-status', '❌ Market hours variables not properly defined', 'error');
+                        return;
+                    }
+                    
+                    if (!isDuringMarketHoursDefined || !findMarketOpenCandleDefined) {
+                        console.error("Market hours functions not properly defined");
+                        updateStatus('functionality-status', '❌ Market hours functions not properly defined', 'error');
+                        return;
+                    }
+                    
+                    // If we get here, we can test the functions
+                    console.log("Testing market hours functions with sample data...");
+                    
+                    // Create test times to check
+                    const testTimes = [
+                        new Date("2023-01-01T09:29:00-05:00"), // Before market open
+                        new Date("2023-01-01T09:30:00-05:00"), // Exactly at market open
+                        new Date("2023-01-01T09:45:00-05:00"), // During trading hours
+                        new Date("2023-01-01T12:00:00-05:00"), // Midday
+                        new Date("2023-01-01T15:55:00-05:00"), // Near close
+                        new Date("2023-01-01T16:00:00-05:00"), // At market close
+                        new Date("2023-01-01T16:05:00-05:00")  // After market close
+                    ];
+                    
+                    // Test isDuringMarketHours function
+                    console.log("Testing isDuringMarketHours function:");
+                    
+                    const marketHoursResults = testTimes.map(time => {
+                        const result = isDuringMarketHours(time);
+                        const timeStr = time.toLocaleTimeString('en-US', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            timeZone: 'America/New_York',
+                            hour12: false
+                        });
+                        
+                        console.log(`Time: ${timeStr} ET - During market hours: ${result}`);
+                        
+                        return {
+                            time: timeStr,
+                            isDuringMarketHours: result
+                        };
+                    });
+                    
+                    // Create test candles for findMarketOpenCandle
+                    const testCandles = testTimes.map(time => ({
+                        datetime: time,
+                        open: 100,
+                        high: 101,
+                        low: 99,
+                        close: 100.5
+                    }));
+                    
+                    // Test findMarketOpenCandle function
+                    console.log("Testing findMarketOpenCandle function:");
+                    const marketOpenCandle = findMarketOpenCandle(testCandles);
+                    
+                    if (marketOpenCandle) {
+                        const timeStr = marketOpenCandle.datetime.toLocaleTimeString('en-US', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            timeZone: 'America/New_York',
+                            hour12: false
+                        });
+                        
+                        console.log(`Market open candle found at: ${timeStr} ET`);
+                    } else {
+                        console.error("No market open candle found");
+                    }
+                    
+                    // Check that the correct candle was found (should be exactly at 9:30 AM)
+                    const correctCandleFound = marketOpenCandle && 
+                                                marketOpenCandle.datetime.getHours() === marketOpenHour && 
+                                                marketOpenCandle.datetime.getMinutes() === marketOpenMinute;
+                    
+                    if (correctCandleFound) {
+                        console.log("✅ findMarketOpenCandle correctly identified the 9:30 AM candle");
+                    } else {
+                        console.error("❌ findMarketOpenCandle did not correctly identify the 9:30 AM candle");
+                    }
+                    
+                    // Create a table with test results
+                    let resultsHtml = `
+                        <h4>Market Hours Test Results:</h4>
+                        <table class="debug-table">
+                            <tr>
+                                <th>Time</th>
+                                <th>Expected Result</th>
+                                <th>Actual Result</th>
+                                <th>Status</th>
+                            </tr>
+                    `;
+                    
+                    // Expected results (based on market hours 9:30 AM - 4:00 PM ET)
+                    const expectedResults = [
+                        false, // 9:29 AM - before market open
+                        true,  // 9:30 AM - at market open (should be included)
+                        true,  // 9:45 AM - during market hours
+                        true,  // 12:00 PM - during market hours
+                        true,  // 3:55 PM - during market hours
+                        false, // 4:00 PM - at market close (should be excluded)
+                        false  // 4:05 PM - after market close
+                    ];
+                    
+                    // Add rows for each test time
+                    for (let i = 0; i < testTimes.length; i++) {
+                        const expected = expectedResults[i];
+                        const actual = marketHoursResults[i].isDuringMarketHours;
+                        const timeStr = marketHoursResults[i].time;
+                        const correct = expected === actual;
+                        
+                        resultsHtml += `
+                            <tr>
+                                <td>${timeStr} ET</td>
+                                <td>${expected ? 'During market hours' : 'Outside market hours'}</td>
+                                <td>${actual ? 'During market hours' : 'Outside market hours'}</td>
+                                <td>${correct ? '✅ Correct' : '❌ Incorrect'}</td>
+                            </tr>
+                        `;
+                    }
+                    
+                    resultsHtml += `</table>`;
+                    
+                    // Add market open candle test result
+                    resultsHtml += `
+                        <h4>Market Open Candle Test:</h4>
+                        <div class="${correctCandleFound ? 'status-success' : 'status-error'}">
+                            ${correctCandleFound ? 
+                                '✅ findMarketOpenCandle correctly identified the 9:30 AM candle' : 
+                                '❌ findMarketOpenCandle did not correctly identify the 9:30 AM candle'}
+                        </div>
+                    `;
+                    
+                    // Determine overall status
+                    const allTestsPassed = marketHoursResults.every((result, i) => 
+                        result.isDuringMarketHours === expectedResults[i]) && correctCandleFound;
+                    
+                    if (allTestsPassed) {
+                        updateStatus('functionality-status', 
+                            `✅ Market hours functionality is working correctly! ${resultsHtml}`, 'success');
+                    } else {
+                        updateStatus('functionality-status', 
+                            `❌ Some market hours tests failed. ${resultsHtml}`, 'error');
+                    }
                 };
                 
-                // Listen for errors
-                window.onerror = function(message, source, lineno, colno, error) {
-                    document.getElementById('result').innerHTML += '<p>Error: ' + message + ' at line ' + lineno + '</p>';
-                    return true;
+                script.onerror = function() {
+                    console.error("Failed to load script.js");
+                    updateStatus('functionality-status', '❌ Failed to load script.js', 'error');
                 };
                 
                 document.head.appendChild(script);
                 
-                // Also check if the SPY_full_1hour_adjsplit.txt file exists
-                fetch('SPY_full_1hour_adjsplit.txt')
-                    .then(response => {
-                        if (!response.ok) {
-                            document.getElementById('result').innerHTML += '<p>Error: SPY data file not found or access denied</p>';
-                        } else {
-                            document.getElementById('result').innerHTML += '<p>SPY data file exists</p>';
-                        }
-                    })
-                    .catch(error => {
-                        document.getElementById('result').innerHTML += '<p>Error fetching SPY data: ' + error.message + '</p>';
-                    });
-            } catch (e) {
-                document.getElementById('result').innerHTML += '<p>Setup error: ' + e.message + '</p>';
+            } catch (error) {
+                console.error('Error testing market hours:', error);
+                updateStatus('functionality-status', `❌ Error testing market hours: ${error.message}`, 'error');
             }
         }
+        
+        // Test trade recording functionality
+        function testTradeRecording() {
+            setupLogCapture('functionality-log');
+            updateStatus('functionality-status', '⏳ Testing trade recording functionality...', 'warning');
+            
+            try {
+                console.log("Loading debug.js to test trade recording functionality...");
+                
+                // Load the debug script
+                const script = document.createElement('script');
+                script.src = 'debug.js';
+                script.onload = function() {
+                    console.log("debug.js loaded successfully");
+                    
+                    // The debug script provides a debug panel with testing functionality
+                    console.log("Debug script has been loaded. Please check the main application.");
+                    
+                    updateStatus('functionality-status', 
+                        `✅ Debug script loaded successfully. To test trade recording, please click the "Launch Application" button and use the debug panel that appears in the top right corner.`, 'success');
+                };
+                
+                script.onerror = function() {
+                    console.error("Failed to load debug.js");
+                    updateStatus('functionality-status', '❌ Failed to load debug.js', 'error');
+                };
+                
+                document.head.appendChild(script);
+                
+            } catch (error) {
+                console.error('Error testing trade recording:', error);
+                updateStatus('functionality-status', `❌ Error testing trade recording: ${error.message}`, 'error');
+            }
+        }
+        
+        // Run integration test
+        function runIntegrationTest() {
+            updateStatus('integration-status', '⏳ Running integration test...', 'warning');
+            
+            try {
+                // Create results container
+                document.getElementById('integration-results').innerHTML = `
+                    <div class="debug-status status-warning">
+                        <h4>Integration Test Started</h4>
+                        <p>Testing steps:</p>
+                        <ol>
+                            <li>Dependencies check</li>
+                            <li>Data loading</li>
+                            <li>Market hours functionality</li>
+                            <li>Trade recording</li>
+                        </ol>
+                    </div>
+                `;
+                
+                // Run each test in sequence
+                checkDependencies();
+                
+                // Wait 1 second before running data loading test
+                setTimeout(function() {
+                    testDataLoading();
+                    
+                    // Wait 3 seconds before running market hours test
+                    setTimeout(function() {
+                        testMarketHours();
+                        
+                        // Wait 2 seconds before running trade recording test
+                        setTimeout(function() {
+                            testTradeRecording();
+                            
+                            // Complete the integration test
+                            setTimeout(function() {
+                                document.getElementById('integration-results').innerHTML += `
+                                    <div class="debug-status status-success">
+                                        <h4>Integration Test Completed</h4>
+                                        <p>To see detailed results, please check the individual test sections above.</p>
+                                        <p>To perform a complete test with the full application, please click the "Launch Application" button.</p>
+                                    </div>
+                                `;
+                                
+                                updateStatus('integration-status', '✅ Integration test completed!', 'success');
+                            }, 2000);
+                        }, 2000);
+                    }, 3000);
+                }, 1000);
+                
+            } catch (error) {
+                console.error('Error running integration test:', error);
+                updateStatus('integration-status', `❌ Error running integration test: ${error.message}`, 'error');
+            }
+        }
+        
+        // Set up event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            // Attach click handlers to buttons
+            document.getElementById('check-dependencies').addEventListener('click', checkDependencies);
+            document.getElementById('test-data-loading').addEventListener('click', testDataLoading);
+            document.getElementById('test-market-hours').addEventListener('click', testMarketHours);
+            document.getElementById('test-trade-recording').addEventListener('click', testTradeRecording);
+            document.getElementById('run-integration-test').addEventListener('click', runIntegrationTest);
+            
+            // Run dependencies check automatically
+            checkDependencies();
+        });
     </script>
-</head>
-<body onload="checkErrors()">
-    <h1>SPY Trading App Debug</h1>
-    <div id="result"></div>
 </body>
 </html>

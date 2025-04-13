@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SPY Trading Simulation - Fixed</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .controls {
+            margin: 20px 0;
+            padding: 15px;
+            background-color: #f5f5f5;
+            border-radius: 5px;
+        }
+        .control-group {
+            margin-right: 20px;
+            display: inline-block;
+        }
+        button {
+            padding: 8px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .data-loading {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f1f1f1;
+            border-radius: 5px;
+        }
+        #debug-output {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f8f8f8;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            min-height: 200px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>SPY Trading Simulation - Fixed Version</h1>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label for="year-select">Select Year:</label>
+                <select id="year-select"></select>
+            </div>
+            
+            <button id="run-simulation">Run Simulation</button>
+            <button id="test-market-hours">Test Market Hours</button>
+            <button id="check-data">Check Data</button>
+        </div>
+        
+        <div class="data-loading">
+            <p>Loading data... <span id="loading-progress">0%</span></p>
+            <progress id="loading-bar" value="0" max="100"></progress>
+        </div>
+        
+        <div id="debug-output"></div>
+    </div>
+    
+    <script src="fixed-script.js"></script>
+    <script>
+        // Add testing functions
+        document.getElementById('test-market-hours').addEventListener('click', function() {
+            const output = document.getElementById('debug-output');
+            output.innerHTML = '<h3>Market Hours Test</h3>';
+            
+            function log(message) {
+                output.innerHTML += message + '<br>';
+                console.log(message);
+            }
+            
+            // Test times
+            const testTimes = [
+                { hour: 8, minute: 0 },    // 8:00 AM
+                { hour: 9, minute: 0 },    // 9:00 AM
+                { hour: 9, minute: 29 },   // 9:29 AM
+                { hour: 9, minute: 30 },   // 9:30 AM
+                { hour: 10, minute: 0 },   // 10:00 AM
+                { hour: 12, minute: 0 },   // 12:00 PM
+                { hour: 15, minute: 59 },  // 3:59 PM
+                { hour: 16, minute: 0 },   // 4:00 PM
+                { hour: 17, minute: 0 }    // 5:00 PM
+            ];
+            
+            log('Testing market hours detection:');
+            
+            // Create test dates
+            const today = new Date();
+            testTimes.forEach(time => {
+                const testDate = new Date(today);
+                testDate.setHours(time.hour, time.minute, 0, 0);
+                
+                const hours = testDate.getHours();
+                const minutes = testDate.getMinutes();
+                
+                // Direct check
+                const isMarketHours = (hours === 9 && minutes >= 30) || (hours > 9 && hours < 16);
+                
+                // App function check
+                const appCheck = window.isDuringMarketHours(testDate);
+                
+                // Format time
+                const timeStr = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+                
+                log(`Time: ${timeStr}`);
+                log(`- Direct check: ${isMarketHours ? 'DURING MARKET HOURS ✓' : 'OUTSIDE MARKET HOURS ✗'}`);
+                log(`- App function: ${appCheck ? 'DURING MARKET HOURS ✓' : 'OUTSIDE MARKET HOURS ✗'}`);
+                log('');
+            });
+        });
+        
+        document.getElementById('check-data').addEventListener('click', function() {
+            const output = document.getElementById('debug-output');
+            output.innerHTML = '<h3>Data Check</h3>';
+            
+            function log(message) {
+                output.innerHTML += message + '<br>';
+                console.log(message);
+            }
+            
+            if (!window.fullData || window.fullData.length === 0) {
+                log('No data loaded. Run the application first.');
+                return;
+            }
+            
+            log(`Total data points: ${window.fullData.length}`);
+            
+            // Count market hours data
+            const marketHoursData = window.fullData.filter(d => d.duringMarketHours);
+            log(`Market hours data: ${marketHoursData.length} (${((marketHoursData.length/window.fullData.length)*100).toFixed(1)}%)`);
+            
+            // Count market open candles
+            const marketOpenCandles = window.fullData.filter(d => {
+                const hours = d.datetime.getHours();
+                const minutes = d.datetime.getMinutes();
+                return hours === 9 && minutes === 30;
+            });
+            
+            log(`Market open (9:30 AM) candles: ${marketOpenCandles.length}`);
+            
+            // Show sample data
+            log('<h4>Sample Data</h4>');
+            const samples = window.fullData.slice(0, 5);
+            samples.forEach((candle, i) => {
+                const hours = candle.datetime.getHours();
+                const minutes = candle.datetime.getMinutes();
+                const timeStr = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+                
+                log(`Sample ${i+1}: ${candle.rawTimeStr}`);
+                log(`- Parsed time: ${timeStr}`);
+                log(`- Market hours: ${candle.duringMarketHours ? 'YES' : 'NO'}`);
+                log('');
+            });
+            
+            // Show hour distribution
+            log('<h4>Hour Distribution</h4>');
+            const hourCounts = {};
+            window.fullData.forEach(candle => {
+                const hour = candle.datetime.getHours();
+                hourCounts[hour] = (hourCounts[hour] || 0) + 1;
+            });
+            
+            Object.keys(hourCounts).sort((a, b) => Number(a) - Number(b)).forEach(hour => {
+                const pct = ((hourCounts[hour] / window.fullData.length) * 100).toFixed(1);
+                log(`Hour ${hour.padStart(2, '0')}:00 - ${hourCounts[hour]} candles (${pct}%)`);
+            });
+        });
+    </script>
+</body>
+</html>

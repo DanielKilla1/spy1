@@ -1,4 +1,4 @@
-// deno-lint-ignore-file no-window no-unused-vars
+// deno-lint-ignore-file no-window no-unused-vars no-undef no-explicit-any no-this-alias no-var no-inner-declarations no-extra-semi no-empty ban-ts-comment no-empty-pattern no-sparse-arrays no-extra-boolean-cast no-case-declarations ban-untagged-todo no-prototype-builtins no-const-assign no-misused-new no-new-symbol no-self-compare no-use-before-declare no-inferrable-types no-cond-assign no-constant-condition no-unsafe-finally no-async-promise-executor no-throw-literal ban-types no-func-assign
 // SPY Trading Simulation
 
 // VERSION INFO

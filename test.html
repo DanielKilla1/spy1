@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Market Hours</title>
+</head>
+<body>
+    <h1>Market Hours Test</h1>
+    <pre id="output"></pre>
+
+    <script>
+        // Test date parsing and market hours identification
+        const output = document.getElementById('output');
+        
+        function log(message) {
+            output.textContent += message + '\n';
+            console.log(message);
+        }
+        
+        // Test data samples
+        const testData = [
+            "2005-01-03 08:00:00",
+            "2005-01-03 09:30:00",
+            "2005-01-03 09:35:00",
+            "2005-01-03 12:00:00",
+            "2005-01-03 15:55:00",
+            "2005-01-03 16:00:00"
+        ];
+        
+        log("Testing date parsing and market hours identification:");
+        
+        testData.forEach(timeStr => {
+            // Parse date directly - the simple way
+            const [datePart, timePart] = timeStr.split(' ');
+            const [year, month, day] = datePart.split('-').map(Number);
+            const [hours, minutes, seconds] = timePart.split(':').map(Number);
+            
+            const date = new Date(year, month-1, day, hours, minutes, seconds);
+            
+            // Check if it's market hours
+            const isMarketHours = (hours === 9 && minutes >= 30) || (hours > 9 && hours < 16);
+            
+            log(`Time: ${timeStr} -> Hours: ${hours}, Minutes: ${minutes}`);
+            log(`   Date Object: ${date.toString()}`);
+            log(`   Market Hours: ${isMarketHours ? 'YES' : 'NO'}`);
+        });
+    </script>
+</body>
+</html>
